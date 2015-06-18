@@ -1,0 +1,11 @@
+Changes
+IRC.xs
+libirc.so
+Makefile.PL
+MANIFEST
+ppport.h
+README
+t/IRC.t
+fallback/const-c.inc
+fallback/const-xs.inc
+lib/IRC.pm

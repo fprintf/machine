@@ -1,0 +1,37 @@
+-----------------------------------------------------
+- Highly Scalable IRC bot in C with Perl extention ability
+-----------------------------------------------------
+
+Design Goals:
+ * performance
+ * Ability to handle thousands of IRC connections at once
+ * Extensibility through C and Perl
+ * libevent based
+ * C pre-forking server design
+
+Program Organization
+1. Connecting to and listening for connections will be handled
+by a master process (there can be multiple masters)
+2. Data coming in from the connections is passed to pre-forked children
+running the Perl interpreters. 
+3. The children get the data in raw format, with some additional info to tell it which socket it came from (so it can write back to that socket)
+4. The children then parse the data and pass it onto their perl interpreter for running commands and whatever else.  Both masters and children will be listening to their sockets using libevent, so one child can handle large amounts of connections simultaneously.
+5. As the data arrives on the sockets the master process will deliver it to the child via Round-Robin semantics, based on the number of pre-forked children.
+
+Master Tasks:
+1. Listens to all connections this master is handling, via libevent
+2. When a read event happens on an active connection it grabs the data
+and fires it off to a child process pipe. Round robin.
+3. Listens on the pipe for messages from the child. This can be messages such as restart the server, restart the child processes, etc..
+
+Child Tasks:
+1. Listen on a pipe paired with this childs master process
+2. When a read event is available on the pipe we parse the information into our IRC object
+then we dispatch an event to our child event base to pass this object to the perl interpeter
+3. We have another callback that catches the perl event and we then fire off our IRC object to perl.
+* Note we need to give the child the socket this data came from so the child can write back to it.
+4. Continue listening for further read events on the pipe
+
+
+
+

@@ -1,0 +1,42 @@
+SRC=con.c xstr.c ircmsg.c irc.c mod.c config.c
+MODSRC=mod_perl/mod_perl.c
+OBJ=$(patsubst %.c,%.o,$(SRC)) 
+MODOBJ=$(patsubst %.c,%.o,$(MODSRC))
+SLIB=libirc.so
+CFLAGS=-ggdb -Wall -DNDEBUG
+PERLLIB=`perl -MExtUtils::Embed -e ccopts -e ldopts`
+prog=client
+LIBEVENT_TARBALL=libevent-2.0.21-stable.tar.gz
+LIBEVENT_DIR=libevent-2.0.21-stable
+LIBEVENT=../share/lib/libevent.so
+DATAROOT=$(abspath $(shell ls -d ../))
+PERLMOD_DIR=IRC
+PERLMOD=$(PERLMOD_DIR)/blib/lib/IRC.pm
+
+all: $(prog) $(SLIB)
+
+clean: 
+	$(RM) -rf $(OBJ) $(MODOBJ) $(SLIB) $(prog) $(LIBEVENT_DIR)
+	cd $(PERLMOD_DIR); make clean
+	cd $(LIBEVENT_DIR); make clean
+
+$(PERLMOD): $(PERLMOD_DIR)
+	cd $(PERLMOD_DIR); perl -f Makefile.PL; make
+
+$(prog): $(LIBEVENT) $(MODOBJ) $(OBJ) main.c
+	$(CC) -o $@ $+ -L../share/lib -lvector -lhtable -lssl -lcrypto -levent -levent_openssl $(PERLLIB) $(CFLAGS) -I. -I../share/include
+
+$(LIBEVENT): $(LIBEVENT_TARBALL)
+	tar -xf $(LIBEVENT_TARBALL)
+	cd $(LIBEVENT_DIR); ./configure --prefix=$(DATAROOT)/share &&  make && make install
+
+$(SLIB): $(OBJ)
+	$(CC) -o $@ -shared $+
+	
+$(MODOBJ): %.o: %.c
+	$(CC) -o $@ -c $+ $(PERLLIB) $(CFLAGS) -I../share/include -fPIC -fomit-frame-pointer
+
+$(OBJ): %.o: %.c
+	$(CC) -o $@ -c $+ $(CFLAGS) -I../share/include -fPIC -fomit-frame-pointer
+
+

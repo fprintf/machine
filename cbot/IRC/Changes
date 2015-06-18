@@ -1,0 +1,6 @@
+Revision history for Perl extension IRC.
+
+0.01  Mon May  5 22:16:56 2014
+	- original version; created by h2xs 1.23 with options
+		-On IRC irc.h
+
