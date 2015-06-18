@@ -22,10 +22,10 @@ which they are not right now.
 
 ## Major issues needing to be addressed
 
-O. When creating new connections through the irc_connect command the callbacks
+1. When creating new connections through the irc_connect command the callbacks
 to listen for data are not assigned correctly (as they are for the primary connection).
-O. As a result of 1. multi-connections are not really being handled properly right now
-O. I need to have a shared data "blackboard" between perl processes (this is easy with IPC::Shareable)
-O. I need to address the config problem. The current design does not have a good way to read nested values in
+2. As a result of 1. multi-connections are not really being handled properly right now
+3. I need to have a shared data "blackboard" between perl processes (this is easy with IPC::Shareable)
+4. I need to address the config problem. The current design does not have a good way to read nested values in
 the config, specifically nested hashes which is a major problem as the config is much easier to read if we
 can do that. 
