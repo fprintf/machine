@@ -33,8 +33,7 @@ sub raw_433 {
     $irc->raw("NICK $mod_perl::config::conf{nickname}".int(rand(5000)));
 }
 
-sub raw_001
-{
+sub raw_001 {
     my $msg = shift;
     my @channels = @{$mod_perl::config::conf{servers}->{tim}->{channels}};
     foreach my $chan (@channels) {

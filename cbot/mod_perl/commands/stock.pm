@@ -11,6 +11,9 @@ my $api_base = 'http://query.yahooapis.com/v1/public/yql?q=';
 my $symbol_api_base = "http://autoc.finance.yahoo.com/autoc?query=";
 
 
+# Register our stock command
+mod_perl::commands::register_command('stock', \&run);
+
 sub stock_help
 {
 	my $irc = shift;

@@ -15,6 +15,9 @@ our $XML_PARSER;
 our $LAST; #paging
 our %feeds;
 
+# Register our run command
+mod_perl::commands::register_command('feeds', \&run);
+
 sub feeds_help
 {
 	my $irc = shift;

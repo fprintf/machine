@@ -3,7 +3,7 @@ package mod_perl::config;
 use strict;
 use warnings;
 
-my $config_path = '/home/dead/dev/cprog/newbot/cprog/cbot/cbot.conf';
+my $config_path = '/home/dead/machine/cbot.conf';
 my %conf;
 
 

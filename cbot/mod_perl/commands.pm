@@ -16,8 +16,7 @@ use Safe;
 ##################################################################
 # UTILITY
 ##################################################################
-sub handle_arg
-{
+sub handle_arg {
     my ($oref, $msg, $href, $arg, @ostr) = @_;
     if (!$arg) {
         ref($href) eq 'CODE' && $href->($msg);
@@ -38,11 +37,39 @@ sub handle_arg
     return (1, @$argv);
 }
 
+#
+## Register a command to the bot
+# so you can register the commands from within 
+# your module instead of rewriting
+# the main command module all the time
+sub register_command {
+    my ($command, $coderef) = @_;
+    if (!ref($coderef) || ref($coderef) ne 'CODE') {
+        print STDERR "Invalid command registry: $command: $coderef\n";
+        return;
+    }
+
+    mod_perl::base::command_register($command, $coderef);
+}
+
+#
+## Register an event handler to the bot
+# so you can register the event handlers from within 
+# your module instead of rewriting
+# the main command module all the time
+sub register_handler {
+    my ($event, $coderef) = @_;
+    if (!ref($coderef) || ref($coderef) ne 'CODE') {
+        print STDERR "Invalid command registry: $command: $coderef\n";
+        return;
+    }
+
+    mod_perl::base::event_register($event, $coderef);
+}
+
 ##################################################################
 # Commands/Help
 ##################################################################
-mod_perl::base::command_register('feeds', \&mod_perl::commands::feeds::run);
-mod_perl::base::command_register('stock', \&mod_perl::commands::stock::run);
 mod_perl::base::command_register('talk', \&talk);
 mod_perl::base::command_register('raw', \&raw);
 mod_perl::base::command_register('perl', \&execperl);
