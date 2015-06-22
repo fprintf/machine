@@ -5,12 +5,38 @@ use warnings;
 use blib 'IRC';
 use IRC;
 use mod_perl::base;
-use mod_perl::commands::feeds;
-use mod_perl::commands::stock;
-use mod_perl::commands::linkbot;
+use mod_perl::config;
 
 use Getopt::Long qw(:config no_ignore_case);
 use Safe;
+
+load_modules($mod_config::config::conf{module_path} || 'mod_perl/commands/');
+
+sub load_modules {
+    my ($module_path) = @_;
+    if (! -e $module_path) {
+        print STDERR "Module directory doesn't exist: $module_path\n";
+        return;
+    }
+
+    my $dh;
+    if (!opendir($dh, $module_path)) {
+        print STDERR "Failed to read $module_path: $!\n";
+        return;
+    }
+
+    while (my $module = readdir($dh)) {
+        next if ($module =~ /^\.*$/);
+        $module =~ s/\.pm$//;
+        eval "use mod_perl::modules::$module";
+        if ($@) {
+            print STDERR "Failed to load module: $module: $@";
+            next;
+        }
+    }
+
+    # Done loading modules..
+}
 
 
 ##################################################################
@@ -60,7 +86,7 @@ sub register_command {
 sub register_handler {
     my ($event, $coderef) = @_;
     if (!ref($coderef) || ref($coderef) ne 'CODE') {
-        print STDERR "Invalid command registry: $command: $coderef\n";
+        print STDERR "Invalid command registry: $event: $coderef\n";
         return;
     }
 
@@ -86,8 +112,6 @@ mod_perl::base::event_register('JOIN',
 );
 
 my %messages = ();
-# Linkbot
-mod_perl::base::event_register('PRIVMSG', \&mod_perl::commands::linkbot::run);
 # Tell handler
 mod_perl::base::event_register('PRIVMSG', \&tell_handler);
 

@@ -1,4 +1,4 @@
-package mod_perl::commands::stock;
+package mod_perl::modules::stock;
 use mod_perl::commands;
 
 use lib '/home/dead/perl5/lib/perl5/';

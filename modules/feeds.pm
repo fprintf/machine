@@ -1,4 +1,4 @@
-package mod_perl::commands::feeds;
+package mod_perl::modules::feeds;
 
 use mod_perl::commands;
 use mod_perl::config;

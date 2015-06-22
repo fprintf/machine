@@ -1,4 +1,4 @@
-package mod_perl::commands::linkbot;
+package mod_perl::modules::linkbot;
 
 use LWP::UserAgent;
 use LWP::MediaTypes qw(guess_media_type);
@@ -14,6 +14,11 @@ my %accepted_protocols = (
 
 my $XML_PARSER = undef;
 my $UA = undef;
+
+my $line_limit = 256; # Maximum characters to output for untitled text-like pages
+
+# Linkbot
+mod_perl::base::event_register('PRIVMSG', \&mod_perl::commands::linkbot::run);
 
 sub connect_useragent
 {
@@ -74,7 +79,11 @@ sub gettitle
             } elsif ( ($title = $doc->find('h2')) ) {
                 $title = $title->as_trimmed_text();
             }
-        } 
+        } elsif ($content_type =~ /text/io) {
+            my $content = $r->decoded_content;
+            $title = substr($content, 0, $line_limit);
+            $title .= $line_limit < length($content) ? '...' : '';
+        }
 	} else {
 		$err = $r->status_line;
 	}
