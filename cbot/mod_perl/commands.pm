@@ -101,50 +101,14 @@ mod_perl::base::command_register('raw', \&raw);
 mod_perl::base::command_register('perl', \&execperl);
 mod_perl::base::command_register('help', \&help);
 mod_perl::base::command_register('connect', \&connect);
-mod_perl::base::command_register('tell', \&tell);
 mod_perl::base::command_register('reload', sub { my $irc = shift; $irc->say("Reloading..."); $irc->reload(); });
 # Example event register 
-mod_perl::base::event_register('JOIN',
-  sub {
-    my $irc = shift;
-    print STDERR "join target: ".$irc->text, "\n";
-  }
-);
-
-my %messages = ();
-# Tell handler
-mod_perl::base::event_register('PRIVMSG', \&tell_handler);
-
-sub tell_handler {
-    my ($irc) = @_;
-    my $ident = lc($irc->nick);
-
-    if (my $data = $messages{$ident}) {
-        foreach my $message (@$data) {
-            my $timestamp = "" . gmtime($message->{time});
-            $irc->say(sprintf("%s: %s <%s> %s",
-                    $irc->nick, $timestamp, $message->{from}, $message->{message}
-                )
-            );
-        }
-        # Delete their messages now
-        delete $messages{$ident};
-    }
-}
-
-sub tell {
-    my ($irc, $arg) = @_;
-
-    my ($to, $message) = split(/\s/, $arg, 2);
-    my $ident = lc($to);
-
-    # Add message to the queue
-    $messages{$ident} ||= [];
-    push(@{$messages{$to}}, {'time' => time, from => $irc->nick, message => $message});
-
-    $irc->say("I'll be sure to let $to know when they're around.");
-}
-
+#mod_perl::base::event_register('JOIN',
+#  sub {
+#    my $irc = shift;
+#    print STDERR "join target: ".$irc->text, "\n";
+#  }
+#);
 
 sub help
 {
