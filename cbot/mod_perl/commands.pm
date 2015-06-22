@@ -10,7 +10,7 @@ use mod_perl::config;
 use Getopt::Long qw(:config no_ignore_case);
 use Safe;
 
-load_modules($mod_config::config::conf{module_path} || 'mod_perl/commands/');
+load_modules($mod_perl::config::conf{module_path} || 'mod_perl/modules/');
 
 sub load_modules {
     my ($module_path) = @_;

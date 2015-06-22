@@ -18,7 +18,7 @@ my $UA = undef;
 my $line_limit = 256; # Maximum characters to output for untitled text-like pages
 
 # Linkbot
-mod_perl::base::event_register('PRIVMSG', \&mod_perl::commands::linkbot::run);
+mod_perl::base::event_register('PRIVMSG', \&run);
 
 sub connect_useragent
 {
