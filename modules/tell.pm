@@ -8,7 +8,7 @@ use IPC::Shareable;
 
 my %messages;
 tie %messages, 'IPC::Shareable', 'tell', {
-    exclusive => 1, destroy => 1, create => 1
+    exclusive => 0, destroy => 1, create => 1
 };
 # Tell handler
 mod_perl::commands::register_handler('PRIVMSG', \&tell_handler);
