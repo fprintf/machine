@@ -13,18 +13,20 @@ DATAROOT=$(abspath $(shell ls -d ../))
 PERLMOD_DIR=IRC
 PERLMOD=$(PERLMOD_DIR)/blib/lib/IRC.pm
 
-all: $(prog) $(SLIB)
+.PHONY: all clean
+
+all: $(prog) $(SLIB) $(PERLMOD)
 
 clean: 
-	$(RM) -rf $(OBJ) $(MODOBJ) $(SLIB) $(prog) $(LIBEVENT_DIR)
 	cd $(PERLMOD_DIR); make clean
 	cd $(LIBEVENT_DIR); make clean
-
-$(PERLMOD): $(PERLMOD_DIR)
-	cd $(PERLMOD_DIR); perl -f Makefile.PL; make
+	$(RM) -rf $(OBJ) $(MODOBJ) $(SLIB) $(prog) $(LIBEVENT_DIR)
 
 $(prog): $(LIBEVENT) $(MODOBJ) $(OBJ) main.c
 	$(CC) -o $@ $+ -L../share/lib -lvector -lhtable -lssl -lcrypto -levent -levent_openssl $(PERLLIB) $(CFLAGS) -I. -I../share/include
+
+$(PERLMOD): $(PERLMOD_DIR)
+	cd $(PERLMOD_DIR); perl -f Makefile.PL; make
 
 $(LIBEVENT): $(LIBEVENT_TARBALL)
 	tar -xf $(LIBEVENT_TARBALL)
