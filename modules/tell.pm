@@ -54,19 +54,16 @@ sub tell {
         "$from: As you wish.",
         "$from: $to will be notified as soon as possible.",
         "$from: Ok boss.",
-        "$from: Ok cheif.",
+        "$from: Ok chief.",
         "$from: Gotcha.",
         "$from: I'm on it.",
         "$from: Whatever you say.",
         "$from: I'll just add that to all the other things you want me to do.",
         "$from: You're so demanding.",
-        "$from: I'm pretty sure $to doesn't care, but I'll let them know any way.",
+        "$from: I'm pretty sure $to doesn't care, but I'll let them know anyway.",
         "$from: Who has two thumbs and doesn't give a crap? This guy! Wait, I don't have thumbs...Fine I''ll tell them.",
-        "$from: Duly noted, my master."
-        
-        
-        
-        
+        "$from: Duly noted, my master.",
+        "$from: You didn't say please."
     );
     $irc->say($responses[int(rand(scalar(@responses)))]);
 }
