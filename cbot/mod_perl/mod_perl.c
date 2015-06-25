@@ -187,17 +187,20 @@ void mod_perl_conf_hash(HV * hash, void (*cb)(struct keydata key, const char * v
 
 int mod_perl_conf_recurse(SV * sv, void (*cb)(struct keydata key, const char * val))
 {
-    if (SvROK(sv)) 
+    if (!SvROK(sv)) { 
         return 0;
+    }
 
     switch(SvTYPE(SvRV(sv))) {
         /* Array reference */
         case SVt_PVAV: 
+            fprintf(stderr, "entering arrayref \n");
             mod_perl_conf_array((AV *)SvRV(sv), cb);
             break;
 
             /* Hash reference */
         case SVt_PVHV:
+            fprintf(stderr, "entering hashref \n");
             mod_perl_conf_hash((HV *)SvRV(sv), cb);
             break;
         default:
@@ -226,7 +229,7 @@ void mod_perl_conf_hash(HV * hash, void (*cb)(struct keydata key, const char * v
             const char * val = SvPV_nolen(sv);
 
             /* Call callback for this value */
-            fprintf(stderr, "Calling callback for %s -> %s\n", stringkey, val);
+//            fprintf(stderr, "Calling callback for %s -> %s\n", stringkey, val);
             cb((struct keydata){.type = KEYDATA_STRING, .key = stringkey}, val);
         }
     } 
@@ -249,7 +252,7 @@ void mod_perl_conf_array(AV * array, void (*cb)(struct keydata key,  const char 
         } else if (SvPOKp(*entry)) { /* Simple scalar */
             const char * val = SvPV_nolen(*entry);
 
-            fprintf(stderr, "Calling callback for array index [%d] -> %s\n", i, val);
+//            fprintf(stderr, "Calling callback for array index [%d] -> %s\n", i, val);
             cb((struct keydata){.type = KEYDATA_INDEX, .index = i}, val);
         }
     }
@@ -277,7 +280,7 @@ void mod_perl_conf_foreach(const char * key, size_t len, void (*cb)(struct keyda
     if (!mod_perl_conf_recurse(*entry, cb) && SvPOKp(*entry)) {
         const char * val = SvPV_nolen(*entry);
 
-        fprintf(stderr, "Calling callback for %s -> %s\n", key, val);
+//        fprintf(stderr, "Calling callback for %s -> %s\n", key, val);
         cb((struct keydata){.type = KEYDATA_STRING, .key = key}, val);
     }
 }

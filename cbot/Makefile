@@ -29,7 +29,7 @@ distclean: clean
 $(prog): $(LIBEVENT) $(MODOBJ) $(OBJ) main.c
 	$(CC) -o $@ $+ -L../share/lib -lvector -lhtable -lssl -lcrypto -levent -levent_openssl $(PERLLIB) $(CFLAGS) -I. -I../share/include
 
-$(PERLMOD): $(SLIB) $(PERLMOD_DIR)
+$(PERLMOD): $(SLIB) 
 	cd $(PERLMOD_DIR) && perl -f Makefile.PL && make
 
 $(LIBEVENT): $(LIBEVENT_DIR)
