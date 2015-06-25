@@ -5,6 +5,7 @@ void mod_round_robin(struct con * con, const char * line);
 int mod_dispatch(struct irc * event);
 int mod_initialize(struct event_base * evbase);
 void mod_shutdown(void);
+void mod_conf_init(void);
 const char * mod_conf_get(const char * key);
 void mod_conf_foreach(const char * key, void (*cb)(struct keydata key, const char * val));
 

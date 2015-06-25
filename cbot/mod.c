@@ -412,12 +412,15 @@ error:
     return NULL;
 }
 
+void mod_conf_init(void)
+{
+    /* Init our config, prior to workers.. */
+    mod_perl_init(&mp_state);
+}
+
 int mod_initialize(struct event_base * evbase)
 {
     struct worker * worker;
-    /* Init our config, prior to workers.. */
-    mod_perl_init(&mp_state);
-
     /* Init our worker modules, each of wich has it's own perl interpreter  */
     worker_list = workers_fork(evbase, NULL, 0);
     /* Init the Listeners for each child on the parent side */

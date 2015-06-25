@@ -1,6 +1,12 @@
 #ifndef MOD_PERL_HEADER__H_
 #define MOD_PERL_HEADER__H_
 
+/* Perl interpreter state struct */
+struct mp {
+    const char * boot; /* Path to boot script */
+    short int init; /* Is my_perl initialized? */
+};
+
 void * mod_perl_dispatch(void * obj);
 void mod_perl_reinit(void);
 void mod_perl_destroy(struct mp * state);

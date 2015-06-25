@@ -100,18 +100,22 @@ int main(int argc, char ** argv)
         flags |= CF_SSL;
     }
 
+    mod_conf_init();
 
     gconfig.servers = vector.new(0);
     gconfig.evbase  = event_base_new();
-    mod_initialize(gconfig.evbase);
 
-    /* Get global nickname settings */
+    /* Read from our config file */
     ctx.nick = mod_conf_get("nickname");
     ctx.user = mod_conf_get("username");
     ctx.usermsg = "goto test;";
     /* Process each server now */
     mod_conf_foreach("servers", process_server);
+    mod_shutdown();
 
+    return 0; /* Testing */
+
+    mod_initialize(gconfig.evbase);
     /* Setup new connection and add our read callback */
     server = Con.new(argv[1], atoi(argv[2]), flags, &ctx);
     Con.callbacks(server, readcb, NULL, eventcb);

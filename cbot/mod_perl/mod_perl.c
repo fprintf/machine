@@ -13,6 +13,8 @@
 #include "../xstr.h"
 #include "../log.h"
 
+#include "mod_perl.h"
+
 #define MOD_PERL_BOOT_DFLT "mod_perl/boot.pl"
 #define MOD_PERL_CONF_NAME "mod_perl::config::conf"
 /* Beware side-effects */
@@ -34,10 +36,7 @@ xs_init(pTHX)
 
 
 static PerlInterpreter * my_perl; /* Perl(older) API requires this be called my_perl (can you believe this?) */
-struct mp {
-    const char * boot; /* Path to boot script */
-    short int init; /* Is my_perl initialized? */
-} mp_state = {
+struct mp mp_state = {
     .boot = MOD_PERL_BOOT_DFLT,
     .init = 0,
 };
