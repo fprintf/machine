@@ -27,5 +27,12 @@ struct config {
     struct event_base * evbase;
 };
 
+struct keydata {
+    enum { KEYDATA_STRING, KEYDATA_INDEX } type;
+    const char * key;
+    int32_t index;
+};
+
+
 extern struct config gconfig;
 #endif

@@ -13,14 +13,18 @@ DATAROOT=$(abspath $(shell ls -d ../))
 PERLMOD_DIR=IRC
 PERLMOD=$(PERLMOD_DIR)/blib/lib/IRC.pm
 
-.PHONY: all clean
+.PHONY: all clean distclean
 
 all: $(prog) $(SLIB) $(PERLMOD)
 
+# Doesn't clean libevent by default, use make distclean for that
 clean: 
-	cd $(PERLMOD_DIR); make clean
-	cd $(LIBEVENT_DIR); make clean
-	$(RM) -rf $(OBJ) $(MODOBJ) $(SLIB) $(prog) $(LIBEVENT_DIR)
+	$(RM) -rf $(OBJ) $(MODOBJ) $(SLIB) $(prog) 
+
+distclean: clean 
+	-cd $(LIBEVENT_DIR) && make clean
+	-cd $(PERLMID_DIR) && make clean
+	rm -rf $(LIBEVENT_DIR)
 
 $(prog): $(LIBEVENT) $(MODOBJ) $(OBJ) main.c
 	$(CC) -o $@ $+ -L../share/lib -lvector -lhtable -lssl -lcrypto -levent -levent_openssl $(PERLLIB) $(CFLAGS) -I. -I../share/include
@@ -28,9 +32,11 @@ $(prog): $(LIBEVENT) $(MODOBJ) $(OBJ) main.c
 $(PERLMOD): $(PERLMOD_DIR)
 	cd $(PERLMOD_DIR); perl -f Makefile.PL; make
 
-$(LIBEVENT): $(LIBEVENT_TARBALL)
+$(LIBEVENT): $(LIBEVENT_DIR)
+	cd $(LIBEVENT_DIR) && ./configure --prefix=$(DATAROOT)/share &&  make && make install
+
+$(LIBEVENT_DIR): $(LIBEVENT_TARBALL)
 	tar -xf $(LIBEVENT_TARBALL)
-	cd $(LIBEVENT_DIR); ./configure --prefix=$(DATAROOT)/share &&  make && make install
 
 $(SLIB): $(OBJ)
 	$(CC) -o $@ -shared $+

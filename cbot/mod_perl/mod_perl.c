@@ -34,7 +34,7 @@ xs_init(pTHX)
 
 
 static PerlInterpreter * my_perl; /* Perl(older) API requires this be called my_perl (can you believe this?) */
-static struct mp {
+struct mp {
     const char * boot; /* Path to boot script */
     short int init; /* Is my_perl initialized? */
 } mp_state = {
@@ -42,7 +42,7 @@ static struct mp {
     .init = 0,
 };
 
-static void mod_perl_destroy(struct mp * state)
+void mod_perl_destroy(struct mp * state)
 {
     if (state->init) {
         /* Allow subsequent create/destroy of perl interpreter 
@@ -180,60 +180,106 @@ const char * mod_perl_conf_get(const char * key, size_t len)
     return p;
 }
 
-void mod_perl_conf_foreach(const char * key, size_t len, void (*cb)(const char * key, const char * val))
+/* 
+ * Recursive handlers for specific types
+ */
+void mod_perl_conf_array(AV * array, void (*cb)(struct keydata key, const char * val));
+void mod_perl_conf_hash(HV * hash, void (*cb)(struct keydata key, const char * val));
+
+int mod_perl_conf_recurse(SV * sv, void (*cb)(struct keydata key, const char * val))
 {
-    HV * hv = get_hv(MOD_PERL_CONF_NAME, 0);
-    HV * hash;
-    AV * array;
+    if (SvROK(sv)) 
+        return 0;
+
+    switch(SvTYPE(SvRV(sv))) {
+        /* Array reference */
+        case SVt_PVAV: 
+            mod_perl_conf_array((AV *)SvRV(sv), cb);
+            break;
+
+            /* Hash reference */
+        case SVt_PVHV:
+            mod_perl_conf_hash((HV *)SvRV(sv), cb);
+            break;
+        default:
+            fprintf(stderr, "Unhandled reference type\n");
+            break;
+    }
+
+    return 1;
+}
+
+void mod_perl_conf_hash(HV * hash, void (*cb)(struct keydata key, const char * val))
+{
+    HE * he;
+
+    for (hv_iterinit(hash), he = hv_iternext(hash); he; he = hv_iternext(hash)) {
+        SV * sv = hv_iterval(hash, he);
+
+        if (!sv)
+            continue;
+
+        if (mod_perl_conf_recurse(sv, cb)) {
+            continue;
+        } else if (SvPOKp(sv)) {
+            size_t len;
+            char * stringkey = hv_iterkey(he, (I32*)&len);
+            const char * val = SvPV_nolen(sv);
+
+            /* Call callback for this value */
+            fprintf(stderr, "Calling callback for %s -> %s\n", stringkey, val);
+            cb((struct keydata){.type = KEYDATA_STRING, .key = stringkey}, val);
+        }
+    } 
+
+    /* end of function */
+}
+
+void mod_perl_conf_array(AV * array, void (*cb)(struct keydata key,  const char * val)) 
+{
+    int32_t i, max;
     SV ** entry;
 
+    for (max = av_len(array), i = 0; i <= max; ++i) {
+        entry = av_fetch(array, i, 0);
+        if (!entry || !*entry) 
+            continue;
+
+        if (mod_perl_conf_recurse(*entry, cb)) {
+            continue;
+        } else if (SvPOKp(*entry)) { /* Simple scalar */
+            const char * val = SvPV_nolen(*entry);
+
+            fprintf(stderr, "Calling callback for array index [%d] -> %s\n", i, val);
+            cb((struct keydata){.type = KEYDATA_INDEX, .index = i}, val);
+        }
+    }
+
+    /* end of function */
+}
+
+void mod_perl_conf_foreach(const char * key, size_t len, void (*cb)(struct keydata key, const char * val))
+{
+    HV * hv = get_hv(MOD_PERL_CONF_NAME, 0);
+    SV ** entry;
 
     if (!hv)
         return;
     entry = hv_fetch(hv, key, (I32)len, 0);
 
-    if (entry && SvROK(*entry)) {
-        switch(SvTYPE(SvRV(*entry))){
-            case SVt_PVAV: /* Array ref */
-                array = (AV *)SvRV(*entry);
-                int32_t i, max;
+    if (!entry || !*entry) {
+        fprintf(stderr, "Invalid config value: %s\n", key);
+        return;
+    }
 
-                for (max = av_len(array), i = 0; i <= max; ++i) {
-                    const char * val = NULL;
+    /* Start processing the entries recursively 
+     * if that doesn't work see if its a normal scalar value
+     */
+    if (!mod_perl_conf_recurse(*entry, cb) && SvPOKp(*entry)) {
+        const char * val = SvPV_nolen(*entry);
 
-                    entry = av_fetch(array, i, 0);
-                    if (entry && SvPOKp(*entry)) {
-                        val = SvPV_nolen(*entry);
-
-                        fprintf(stderr, "Calling callback for array index [%d] -> %s\n", i, val);
-                        cb(NULL, val);
-                    }
-                }
-
-                break;
-            case SVt_PVHV: /* Hash ref */
-                hash = (HV *)SvRV(*entry);
-                HE * he;
-
-                for (hv_iterinit(hash), he = hv_iternext(hash); he; he = hv_iternext(hash)) {
-                    size_t len;
-                    char * key = hv_iterkey(he, (I32*)&len);
-                    SV * sv = hv_iterval(hash, he);
-                    const char * val = NULL;
-
-                    if (sv && SvPOKp(sv))
-                        val = SvPV_nolen(sv);
-
-                    /* Call callback for this value */
-                    fprintf(stderr, "Calling callback for %s -> %s\n", key, val);
-                    cb(key, val);
-                } 
-
-                break;
-
-            default:
-                break;
-        }
+        fprintf(stderr, "Calling callback for %s -> %s\n", key, val);
+        cb((struct keydata){.type = KEYDATA_STRING, .key = key}, val);
     }
 }
 

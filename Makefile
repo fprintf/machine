@@ -1,7 +1,10 @@
 dirs = cbot 
 
 all: $(dirs)
-	cd $^; make
+	cd $^ && make
 
 clean: $(dirs)
-	cd $^; make clean
+	cd $^ && make clean
+
+distclean: $(dirs)
+	cd $^ && make distclean

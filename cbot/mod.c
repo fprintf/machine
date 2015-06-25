@@ -68,6 +68,10 @@ static const struct worker_list {
 static struct worker_list * worker_list;
 
 
+/* State for embedded perl interpreter */
+extern struct mp mp_state;
+
+
 /* Forward declaration */
 struct worker_list * workers_fork(struct event_base * evbase, register struct worker_list * wl, pid_t child);
 static struct worker_list * workers_free(struct worker_list * wl);
@@ -412,7 +416,8 @@ int mod_initialize(struct event_base * evbase)
 {
     struct worker * worker;
     /* Init our config, prior to workers.. */
-    /* TODO */
+    mod_perl_init(&mp_state);
+
     /* Init our worker modules, each of wich has it's own perl interpreter  */
     worker_list = workers_fork(evbase, NULL, 0);
     /* Init the Listeners for each child on the parent side */
@@ -438,6 +443,7 @@ int mod_initialize(struct event_base * evbase)
 void mod_shutdown(void)
 {
     worker_list = workers_free(worker_list);
+    mod_perl_destroy(&mp_state);
 }
 
 const char * mod_conf_get(const char * key)
@@ -445,7 +451,7 @@ const char * mod_conf_get(const char * key)
     size_t len = strlen(key);
     return mod_perl_conf_get(key, len);
 }
-void mod_conf_foreach(const char * key, void (*cb)(const char * key, const char * val))
+void mod_conf_foreach(const char * key, void (*cb)(struct keydata key, const char * val))
 {
     size_t len = strlen(key);
     mod_perl_conf_foreach(key, len, cb);

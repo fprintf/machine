@@ -32,8 +32,8 @@
 #include <event2/bufferevent_struct.h>
 
 #include <irc.h> /* includes con.h also */
-#include <mod.h> /* for mod_initialize() which parses our config also */
 #include <common.h>
+#include <mod.h> /* for mod_initialize() which parses our config also */
 
 int readcb(struct con * con, const char * s, void * userdata)
 {
@@ -66,6 +66,20 @@ void sigcallback(evutil_socket_t fd, short signum, void * arg)
     event_base_loopexit(evbase, NULL);
 }
 
+void process_server(struct keydata key, const char * val) {
+    switch(key.type) {
+        case KEYDATA_INDEX:
+            fprintf(stderr, "process_server got [%ld] = %s\n", key.index, val);
+            break;
+        case KEYDATA_STRING:
+            fprintf(stderr, "process_server got %s = %s\n", key.key, val);
+            break;
+        default:
+            fprintf(stderr, "process_server got unknown value type: %s\n", val);
+            break;
+    }
+}
+
 int main(int argc, char ** argv)
 {
 //    struct event * evsig;
@@ -86,13 +100,18 @@ int main(int argc, char ** argv)
         flags |= CF_SSL;
     }
 
-    ctx.nick = "thisiscool";
-    ctx.user = "iz-bot";
-    ctx.usermsg = "goto test;";
 
     gconfig.servers = vector.new(0);
     gconfig.evbase  = event_base_new();
     mod_initialize(gconfig.evbase);
+
+    /* Get global nickname settings */
+    ctx.nick = mod_conf_get("nickname");
+    ctx.user = mod_conf_get("username");
+    ctx.usermsg = "goto test;";
+    /* Process each server now */
+    mod_conf_foreach("servers", process_server);
+
     /* Setup new connection and add our read callback */
     server = Con.new(argv[1], atoi(argv[2]), flags, &ctx);
     Con.callbacks(server, readcb, NULL, eventcb);
