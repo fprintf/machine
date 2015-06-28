@@ -13,6 +13,7 @@ struct vector_api {
     size_t (*size)(struct vector *);  /* Return number of elements in vector */
 
     /* Stack based access */
+    void * (*top)(struct vector *); /* Return top element on the vector (with push/pop) */
     void * (*push)(struct vector *, void * data); /* Append to end of vector */
     void * (*pop)(struct vector *);               /* Remove from end of vector */
 
