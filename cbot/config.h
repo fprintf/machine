@@ -10,11 +10,9 @@
 struct server {
     struct con * con; /* Connection object for this server */
     const char * name; /* Just a name to display for this server */
-    const char * host;
-    short int port;
     const char * pass;
-    bool use_ssl;      /* We might want to convert these to bitwise flags if we get too many */
-    bool use_password;
+    const char * nickname;  /* nickname for this server */
+    const char * username;  /* Username for this server */
     bool use_knock;    /* Server requires a knock sequence to open the 'port' above! */
     const char * knock_sequence; /* This will contain a list of space separated ports to knock to open the port above */
 };
@@ -27,9 +25,16 @@ struct config {
     struct event_base * evbase;
 };
 
+/* Build a server */
+struct server * make_server(const char * name);
+/* Destroy a server */
+void destroy_server(struct server ** server);
+
+
 struct keydata {
     enum { KEYDATA_STRING, KEYDATA_INDEX } type;
     const char * key;
+    const char * parentkey;
     int32_t index;
 };
 

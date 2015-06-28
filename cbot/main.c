@@ -24,8 +24,8 @@
  */
 
 #include <stdio.h>
-#include <signal.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <event2/bufferevent.h>
 #include <event2/event.h>
@@ -34,6 +34,7 @@
 #include <irc.h> /* includes con.h also */
 #include <common.h>
 #include <mod.h> /* for mod_initialize() which parses our config also */
+#include <config.h>
 
 int readcb(struct con * con, const char * s, void * userdata)
 {
@@ -45,12 +46,12 @@ int readcb(struct con * con, const char * s, void * userdata)
 
 int eventcb(struct con * con, short event, void * userdata)
 {
-    struct context * ctx = userdata;
+    struct server * server = userdata;
 
     switch(event) {
         case CON_EVENT_CONNECTED:
-            Con.printf(con, "USER %s %s * :%s\r\n", ctx->nick, ctx->user, ctx->usermsg);
-            Con.printf(con, "NICK %s\r\n", ctx->nick);
+            Con.printf(con, "USER %s %s * :%s\r\n", server->nickname, server->username, "dead");
+            Con.printf(con, "NICK %s\r\n", server->nickname);
             break;
         case CON_EVENT_EOF:
             fprintf(stderr, "Disconnected...?\n");
@@ -59,20 +60,82 @@ int eventcb(struct con * con, short event, void * userdata)
     return 1;
 }
 
-void sigcallback(evutil_socket_t fd, short signum, void * arg)
-{
-    struct event_base * evbase = arg;
-    fprintf(stderr, "Got interrupt..closing\n");
-    event_base_loopexit(evbase, NULL);
-}
-
 void process_server(struct keydata key, const char * val) {
+    struct server * server = vector.index(gconfig.servers, vector.size(gconfig.servers) - 1);
+
     switch(key.type) {
         case KEYDATA_INDEX:
-            fprintf(stderr, "process_server got [%ld] = %s\n", key.index, val);
+            /* Get last added server */
+            if (!server)
+                break;
+
+            /* TODO nothing really to be done here right now */
+            fprintf(stderr, "process_server got %s[%ld] = %s\n", key.parentkey, key.index, val);
             break;
         case KEYDATA_STRING:
-            fprintf(stderr, "process_server got %s = %s\n", key.key, val);
+            /* Start a new server, finish the old server */
+            if (
+                strncmp(val, "HASHREF", sizeof "HASHREF" - 1) == 0 || 
+                strncmp(key.key, "FINAL", sizeof "FINAL" - 1) == 0
+               ) {
+                /* We have an existing server in play, finish it out */
+                if (server) {
+                    fprintf(stderr, "server: %s connecting\n", server->name);
+                    /* Start our server connection */
+                    Con.callbacks(server->con, readcb, NULL, eventcb);
+                    Con.connect(server->con, gconfig.evbase);
+                }
+                /* Create a new server only if we're not completely done */
+                if (strncmp(key.key, "FINAL", sizeof "FINAL" - 1) != 0) {
+                    fprintf(stderr, "new server: %s\n", key.key);
+                    server = make_server(key.key);
+                    vector.push(
+                            gconfig.servers, 
+                            server
+                            );
+                }
+                break; /* Done for this iteration */
+            } 
+            
+            /* We don't have a server yet. ignore */
+            if (!server) 
+                break;
+
+            /* Add the host to the server */
+            if (strncmp(key.key, "host", sizeof "host" - 1) == 0) {
+                fprintf(stderr, "server: %s host: %s\n", server->name, val);
+                Con.host(server->con, val);
+            } 
+            /* port */
+            else if (strncmp(key.key, "port", sizeof "port" - 1) == 0) {
+                /* FIXME Don't use atoi() dude! could crash with overflow */
+                int port = atoi(val);
+                if (port >= 65535 || port <= 0) {
+                    fprintf(stderr, "Invalid port: %d in parse, defaulting to: 6667\n", port);
+                    port = 6667;
+                }
+
+                fprintf(stderr, "server: %s port: %d\n", server->name, port);
+                Con.port(server->con, port);
+            } 
+            /* Enable SSL */
+            else if (strncmp(key.key, "ssl", sizeof "ssl" - 1) == 0) {
+                short tf = atoi(val);
+                fprintf(stderr, "server: %s use_ssl: %d\n", server->name, tf);
+                Con.fssl(server->con, tf);
+            }
+            /* Nickname */
+            else if (strncmp(key.key, "nick", sizeof "nick" - 1) == 0) {
+                server->nickname = val;
+                fprintf(stderr, "server: %s nickname: %s\n", server->name, server->nickname);
+            } 
+            /* Username */
+            else if (strncmp(key.key, "user", sizeof "user" - 1) == 0) {
+                server->username = val;
+                fprintf(stderr, "server: %s username: %s\n", server->name, server->username);
+            } else {
+                fprintf(stderr, "Warning: invalid option: %s\n", key.key);
+            }
             break;
         default:
             fprintf(stderr, "process_server got unknown value type: %s\n", val);
@@ -82,60 +145,30 @@ void process_server(struct keydata key, const char * val) {
 
 int main(int argc, char ** argv)
 {
-//    struct event * evsig;
-
-    struct con * server;
-    enum con_flags flags = CF_RECONNECT;
-
-    struct context ctx;
-
-
-    if (argc < 3) {
-        fprintf(stderr,"usage: %s <host> <port> [use_ssl]\n", argv[0]);
-        return 1;
-    }
-
-    /* Use ssl also */
-    if (argc == 4) {
-        flags |= CF_SSL;
-    }
-
+    /* Init perl interpreter so we can parse the config */
     mod_conf_init();
 
     gconfig.servers = vector.new(0);
     gconfig.evbase  = event_base_new();
 
-    /* Read from our config file */
-    ctx.nick = mod_conf_get("nickname");
-    ctx.user = mod_conf_get("username");
-    ctx.usermsg = "goto test;";
     /* Process each server now */
     mod_conf_foreach("servers", process_server);
+    /* We're done parsing the config for now */
     mod_shutdown();
 
-    return 0; /* Testing */
-
+    /* Initialize our workers */
     mod_initialize(gconfig.evbase);
-    /* Setup new connection and add our read callback */
-    server = Con.new(argv[1], atoi(argv[2]), flags, &ctx);
-    Con.callbacks(server, readcb, NULL, eventcb);
-    Con.connect(server, gconfig.evbase);
-    /* Add server to our global server vector */
-    vector.sindex(gconfig.servers, 0, server);
-    fprintf(stdout, "DBG index: 0 server: %p\n", vector.index(gconfig.servers, 0));
 
     /* Begin our loop */
     event_base_dispatch(gconfig.evbase);
 
     /* Cleanup */
-    Con.free(server);
     event_base_free(gconfig.evbase);
+    /* Free all the servers we have running */
+    size_t i;
+    for (i = vector.size(gconfig.servers) - 1; i != -1; --i)
+        destroy_server(vector.index(gconfig.servers, i));
     vector.delete(gconfig.servers);
-    // FIXME THIS IS CAUSING SEGFAULTS
-    // FIXME It's actually workers_free()
-    // FIXME we need to fix shutdown..
-    // TODO Im already working on refactoring the code into its own file though
-    // in process hopefully will discover the bug
     mod_shutdown();
     puts("[--- Returning to OS control ---]");
 

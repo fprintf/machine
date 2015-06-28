@@ -182,10 +182,10 @@ const char * mod_perl_conf_get(const char * key, size_t len)
 /* 
  * Recursive handlers for specific types
  */
-void mod_perl_conf_array(AV * array, void (*cb)(struct keydata key, const char * val));
-void mod_perl_conf_hash(HV * hash, void (*cb)(struct keydata key, const char * val));
+void mod_perl_conf_array(AV * array, const char * key, void (*cb)(struct keydata key, const char * val));
+void mod_perl_conf_hash(HV * hash, const char * key, void (*cb)(struct keydata key, const char * val));
 
-int mod_perl_conf_recurse(SV * sv, void (*cb)(struct keydata key, const char * val))
+int mod_perl_conf_recurse(SV * sv, const char * key, void (*cb)(struct keydata key, const char * val))
 {
     if (!SvROK(sv)) { 
         return 0;
@@ -195,14 +195,17 @@ int mod_perl_conf_recurse(SV * sv, void (*cb)(struct keydata key, const char * v
         /* Array reference */
         case SVt_PVAV: 
             fprintf(stderr, "entering arrayref \n");
-            mod_perl_conf_array((AV *)SvRV(sv), cb);
+            cb((struct keydata){.parentkey = NULL, .type = KEYDATA_STRING, .key = key}, "ARRAYREF");
+            mod_perl_conf_array((AV *)SvRV(sv), key, cb);
             break;
 
-            /* Hash reference */
+        /* Hash reference */
         case SVt_PVHV:
             fprintf(stderr, "entering hashref \n");
-            mod_perl_conf_hash((HV *)SvRV(sv), cb);
+            cb((struct keydata){.parentkey = NULL, .type = KEYDATA_STRING, .key = key}, "HASHREF");
+            mod_perl_conf_hash((HV *)SvRV(sv), key, cb);
             break;
+            
         default:
             fprintf(stderr, "Unhandled reference type\n");
             break;
@@ -211,7 +214,7 @@ int mod_perl_conf_recurse(SV * sv, void (*cb)(struct keydata key, const char * v
     return 1;
 }
 
-void mod_perl_conf_hash(HV * hash, void (*cb)(struct keydata key, const char * val))
+void mod_perl_conf_hash(HV * hash, const char * key, void (*cb)(struct keydata key, const char * val))
 {
     HE * he;
 
@@ -221,23 +224,24 @@ void mod_perl_conf_hash(HV * hash, void (*cb)(struct keydata key, const char * v
         if (!sv)
             continue;
 
-        if (mod_perl_conf_recurse(sv, cb)) {
-            continue;
-        } else if (SvPOKp(sv)) {
-            size_t len;
-            char * stringkey = hv_iterkey(he, (I32*)&len);
+        size_t len;
+        char * stringkey = hv_iterkey(he, (I32*)&len);
+
+        /* TODO Need to handle integers as well as strings */
+        if (SvPOKp(sv)) { 
             const char * val = SvPV_nolen(sv);
 
-            /* Call callback for this value */
 //            fprintf(stderr, "Calling callback for %s -> %s\n", stringkey, val);
-            cb((struct keydata){.type = KEYDATA_STRING, .key = stringkey}, val);
+            cb((struct keydata){.parentkey = key, .type = KEYDATA_STRING, .key = stringkey}, val);
+        } else { // If all else fails consider it a reference of some kind
+            mod_perl_conf_recurse(sv, stringkey, cb);
         }
     } 
 
     /* end of function */
 }
 
-void mod_perl_conf_array(AV * array, void (*cb)(struct keydata key,  const char * val)) 
+void mod_perl_conf_array(AV * array, const char * key, void (*cb)(struct keydata key,  const char * val)) 
 {
     int32_t i, max;
     SV ** entry;
@@ -247,13 +251,13 @@ void mod_perl_conf_array(AV * array, void (*cb)(struct keydata key,  const char 
         if (!entry || !*entry) 
             continue;
 
-        if (mod_perl_conf_recurse(*entry, cb)) {
-            continue;
-        } else if (SvPOKp(*entry)) { /* Simple scalar */
+        if (SvPOKp(*entry)) {
             const char * val = SvPV_nolen(*entry);
 
-//            fprintf(stderr, "Calling callback for array index [%d] -> %s\n", i, val);
-            cb((struct keydata){.type = KEYDATA_INDEX, .index = i}, val);
+            //            fprintf(stderr, "Calling callback for array index [%d] -> %s\n", i, val);
+            cb((struct keydata){.parentkey = key, .type = KEYDATA_INDEX, .index = i}, val);
+        } else {
+            mod_perl_conf_recurse(*entry, key, cb);
         }
     }
 
@@ -277,12 +281,17 @@ void mod_perl_conf_foreach(const char * key, size_t len, void (*cb)(struct keyda
     /* Start processing the entries recursively 
      * if that doesn't work see if its a normal scalar value
      */
-    if (!mod_perl_conf_recurse(*entry, cb) && SvPOKp(*entry)) {
+    if (SvPOKp(*entry)) {
         const char * val = SvPV_nolen(*entry);
 
 //        fprintf(stderr, "Calling callback for %s -> %s\n", key, val);
-        cb((struct keydata){.type = KEYDATA_STRING, .key = key}, val);
+        cb((struct keydata){.parentkey = key, .type = KEYDATA_STRING, .key = key}, val);
+    } else {
+        mod_perl_conf_recurse(*entry, key, cb);
     }
+
+    /* Finally */
+    cb((struct keydata){.parentkey = key, .type = KEYDATA_STRING, .key = "FINAL"}, "");
 }
 
 void * mod_perl_dispatch(void * ctx)
