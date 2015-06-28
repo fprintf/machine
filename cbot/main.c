@@ -70,7 +70,7 @@ void process_server(struct keydata key, const char * val) {
                 break;
 
             /* TODO nothing really to be done here right now */
-            fprintf(stderr, "process_server got %s[%ld] = %s\n", key.parentkey, key.index, val);
+            fprintf(stderr, "process_server got %s[%zd] = %s\n", key.parentkey, key.index, val);
             break;
         case KEYDATA_STRING:
             /* Start a new server, finish the old server */
@@ -82,6 +82,10 @@ void process_server(struct keydata key, const char * val) {
                 if (server) {
                     fprintf(stderr, "server: %s connecting\n", server->name);
                     /* Start our server connection */
+                    fprintf(stderr, "host: %s:%d nick: %s user: %s\n",
+                            Con.host(server->con, NULL), Con.port(server->con, 0),
+                            server->nickname, server->username
+                            );
                     Con.callbacks(server->con, readcb, NULL, eventcb);
                     Con.connect(server->con, gconfig.evbase);
                 }
@@ -145,27 +149,30 @@ void process_server(struct keydata key, const char * val) {
 
 int main(int argc, char ** argv)
 {
+    /* Initialize our workers and our event base */
+    gconfig.evbase  = event_base_new();
+    mod_initialize(gconfig.evbase); /* Workers must be running before we start dispatching data */
+    
     /* Init perl interpreter so we can parse the config */
     mod_conf_init();
-
     gconfig.servers = vector.new(0);
-    gconfig.evbase  = event_base_new();
-
     /* Process each server now */
     mod_conf_foreach("servers", process_server);
     /* We're done parsing the config for now */
-    mod_shutdown();
+//    mod_shutdown();
 
-    /* Initialize our workers */
-    mod_initialize(gconfig.evbase);
 
+    size_t i;
+    for (i = vector.size(gconfig.servers) - 1; i != -1; --i) {
+        struct server * server = vector.index(gconfig.servers, i);
+        fprintf(stderr, "servers: S%d %s:%d %s!%s\n", i, Con.host(server->con, NULL), Con.port(server->con, 0), server->nickname, server->username);
+    }
     /* Begin our loop */
     event_base_dispatch(gconfig.evbase);
 
     /* Cleanup */
     event_base_free(gconfig.evbase);
     /* Free all the servers we have running */
-    size_t i;
     for (i = vector.size(gconfig.servers) - 1; i != -1; --i)
         destroy_server(vector.index(gconfig.servers, i));
     vector.delete(gconfig.servers);
