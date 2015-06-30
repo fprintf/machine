@@ -52,7 +52,7 @@ sub command_register
     $cmd = lc($cmd);
 
     if (exists($command_registry{$cmd})) {
-        print "[warn] overwriting existing '$cmd'\n";
+        print STDERR "[warn] overwriting existing '$cmd'\n";
     }
 
     $command_registry{$cmd} = $code;

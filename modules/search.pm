@@ -21,6 +21,7 @@ my $ddg_api = $mod_perl::config::conf{ddg_api_url} ||
 
 mod_perl::commands::register_command('g', \&google_run);
 mod_perl::commands::register_command('google', \&google_run);
+mod_perl::commands::register_command('ddg', \&ddg_run);
 
 sub google_help {
 	my $irc = shift;
@@ -31,15 +32,15 @@ sub google_help {
 
 sub ddg_help {
 	my $irc = shift;
-    $irc->say("usage: g[oogle] <query>");
+    $irc->say("usage: ddg <query>");
     $irc->say("-> Search google");
     return;
 }
 
-sub google_lookup {
-    my ($irc, $query) = @_;
+sub lookup {
+    my ($irc, $api_url, $query) = @_;
     my $ua = LWP::UserAgent->new;
-    my $req = $ua->get($google_api . uri_escape($query));
+    my $req = $ua->get($api_url . uri_escape($query));
 
     if ($req->is_success) {
         my $content = $req->decoded_content;
@@ -53,7 +54,7 @@ sub google_lookup {
 
         return if (!@results);
 
-        $irc->say(sprintf("[google %s] results: %s took %.2fms", $query, $resultCount, $searchTime));
+        $irc->say(sprintf("[%s] results: %s took %.2fms", $query, $resultCount, $searchTime));
         foreach my $result (@results[0..5]) {
             my $title = decode_entities($result->{titleNoFormatting} || '');
             my $url = $result->{url} || '';
@@ -63,21 +64,32 @@ sub google_lookup {
     } 
 }
 
+sub ddg_run {
+    my ($irc, $arg) = @_;
+    my %opt;
+    my ($ret, @argv) = mod_perl::commands::handle_arg(\%opt, $irc, \&ddg_help, $arg, qw(help|h));
+    return if (!$ret);
+
+	if (!$arg) {
+		ddg_help($irc);
+		return;
+	}
+
+	lookup($irc, $ddg_api, $arg);
+}
+
 sub google_run {
     my ($irc, $arg) = @_;
     my %opt;
     my ($ret, @argv) = mod_perl::commands::handle_arg(\%opt, $irc, \&google_help, $arg, qw(help|h));
     return if (!$ret);
 
-	if (!@argv) {
+	if (!$arg) {
 		google_help($irc);
 		return;
 	}
 
-	foreach my $f (@argv) {
-		$f = lc($f);
-		google_lookup($irc, $f);
-	}
+	lookup($irc, $google_api, $arg);
 }
 
 1;

@@ -7,6 +7,8 @@ use HTML::TreeBuilder;
 use strict;
 use warnings;
 
+use mod_perl::modules::utils;
+
 my %accepted_protocols = (
     'http' => 1, 
     'https' => 1,
@@ -99,35 +101,6 @@ sub gettitle
     $title ||= 'Unknown';
 
 	return ($title, $err);
-}
-
-# Shortens a url
-# may consider changing site
-sub tinyurl
-{
-    my ($uri) = @_;
-    my $url_shortener = 'http://is.gd/create.php';
-	my $ua = connect_useragent();
-    my $min = 25; # Including http://
-
-    # Already short enough, don't bother
-    if (length($uri) < $min) {
-        return $uri;
-    }
-
-
-    my $query = sprintf("%s?format=simple&url=%s", $url_shortener, $uri);
-	my $r = $ua->get($query);
-    my $tinyurl = '';
-
-	if ($r->is_success) {
-        $tinyurl = $r->decoded_content();
-	} else {
-        print STDERR "failed to shorten: $uri: ".$r->status_line."\n";
-		$tinyurl = "can't shorten";
-	}
-
-    return $tinyurl;
 }
 
 sub threatcheck
@@ -243,7 +216,7 @@ sub run
             next;
         }
         my $threat = threatcheck($uri);
-        my $tinyurl = tinyurl($uri);
+        my $tinyurl = mod_perl::modules::utils::tinyurl($uri);
         $irc->say(" $tinyurl :: $threat :: $title ");
     }
 }

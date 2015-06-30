@@ -26,6 +26,12 @@ sub event_handler
 #    $irc->raw(sprintf("PONG %s",  $irc->text()));
 #}
 
+# MOTD
+sub raw_372 {
+	my $msg = shift;
+	print STDERR $msg->text(), "\n";
+}
+
 
 # Nickname in use, we need to pick a new one
 sub raw_433 {
@@ -35,7 +41,7 @@ sub raw_433 {
 
 sub raw_001 {
     my $msg = shift;
-    my @channels = @{$mod_perl::config::conf{servers}->{tim}->{channels}};
+    my @channels = @{$mod_perl::config::conf{servers}->{rizon}->{channels}};
     foreach my $chan (@channels) {
 	    $msg->raw("JOIN $chan");
     }
@@ -83,6 +89,11 @@ sub QUIT
 {
     my $msg = shift;
 #    event_handler('NOTICE', $msg);
+}
+
+sub raw_485 {
+	my $msg = shift;
+	print STDERR "485 ".$msg->text."\n";
 }
 
 1;

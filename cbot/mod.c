@@ -60,8 +60,8 @@ static const struct worker_list {
     size_t active_workers;
     struct worker * current; /* For round robin */
     struct event * childsig; /* Handler for SIGCHLD signal */
-    struct event * intsig; /* Handler for SIGCHLD signal */
-    struct event * hupsig; /* Handler for SIGCHLD signal */
+    struct event * intsig; /* Handler for SIGINT signal */
+    struct event * hupsig; /* Handler for SIGHUP signal */
     pid_t reapme;            /* Last reaped pid */
     SLIST_HEAD(workers, worker) * list;
 } worker_list_initializer;
@@ -94,6 +94,9 @@ static void workers_spawn_callback(evutil_socket_t sock, short what, void * data
     list->reapme = 0;
 }
 
+/* Forward declartion for parent_sig_callback below */
+static int workers_command_reload(const char * argline);
+
 static void parent_sig_callback(evutil_socket_t sig, short what, void * data)
 {
     struct worker_list * list = data;
@@ -106,14 +109,31 @@ static void parent_sig_callback(evutil_socket_t sig, short what, void * data)
             event_base_loopexit(list->main_evbase, NULL);
             break;
         case SIGHUP:
-            log_debug("parent [%d] caught SIGHUP restarting children...", getpid());
-            event_base_loopexit(list->main_evbase, NULL);
+            log_debug("parent [%d] caught SIGHUP reloading...", getpid());
+			/* TODO RELOAD the config file then reload the children */
+			workers_command_reload(NULL);
             break;
         case SIGCHLD:
             child = waitpid(0, &status, 0);
             log_debug("parent [%d] caught SIGCHLD for pid [%d]", getpid(), child);
             list->reapme = child;
-            event_base_once(list->main_evbase, -1, EV_TIMEOUT, workers_spawn_callback, data, NULL);
+            event_base_once(list->main_evbase, -1, EV_TIMEOUT, workers_spawn_callback, list, NULL);
+            break;
+        default:
+            break;
+    }
+}
+
+
+/* Sighandler for child processes */
+static void worker_sig_callback(evutil_socket_t sig, short what, void * data)
+{
+    struct worker_ctx * ctx = data;
+
+    switch (sig) {
+        case SIGHUP:
+            log_debug("child [%d] caught SIGINT exiting...", getpid());
+            event_base_loopexit(ctx->base, NULL);
             break;
         default:
             break;
@@ -154,7 +174,7 @@ static int workers_command_reload(const char * argline)
 
     SLIST_FOREACH(worker, worker_list->list, next) {
         if (worker->pid > 0) {
-            log_debug("[debug] sending SIGINT to %d", worker->pid);
+            log_debug("[debug] sending SIGHUP to %d", worker->pid);
             kill(worker->pid, SIGHUP);
         } else {
             log_debug("[debug] empty worker container? pid: %d", worker->pid);
@@ -212,7 +232,7 @@ static void parent_event_callback(struct bufferevent * bev, void * data)
         //    log_debug("vector: %p cidindex: %p parent read line [%s] to CID: [%lu]", gconfig.servers, vector.index(gconfig.servers, cid), line + consumed, cid);
             con = vector.index(gconfig.servers, cid);
             if (con) {
-                log_debug("parent sending [%s] to CID: [%lu]", line + consumed, cid);
+//                log_debug("parent sending [%s] to CID: [%lu]", line + consumed, cid);
                 Con.puts(con, line + consumed);
             } else {
                 log_debug("Trying to send to invalid server CID: %lu message: %s\n", cid, line + consumed);
@@ -231,8 +251,8 @@ static void worker_free(struct worker * worker)
     if (!worker) 
         return;
     /* Kill and wait for pid */
-    kill(worker->pid, SIGINT);
-    waitpid(worker->pid, NULL, -1);
+    kill(worker->pid, SIGHUP);
+    waitpid(0, NULL, -1);
 
     /* Free resources */
     close(worker->sock);
@@ -242,7 +262,7 @@ static void worker_free(struct worker * worker)
 
 static void worker_init(int sock)
 {
-    struct worker_ctx ctx = {0};
+    struct worker_ctx ctx = {.base = NULL};
 
     do {
         ctx.restart_loop = 0;
@@ -259,11 +279,18 @@ static void worker_init(int sock)
         bufferevent_setcb(ctx.evsock, worker_event_callback, NULL, NULL, ctx.evsock);
         bufferevent_enable(ctx.evsock, EV_READ);
 
+		/* Add sig handler */
+		ctx.evsigint = evsignal_new(ctx.base, SIGHUP, worker_sig_callback, &ctx);
+
+		sigset_t allsigs;
+		sigfillset(&allsigs);
+		sigprocmask(SIG_UNBLOCK, &allsigs, NULL);
         /* Begin main loop */
         event_base_dispatch(ctx.base);
 
         /* Cleanup */
         bufferevent_free(ctx.evsock);
+        event_free(ctx.evsigint);
         event_base_free(ctx.base);
     } while(ctx.restart_loop);
 
@@ -360,6 +387,7 @@ struct worker_list * workers_fork(struct event_base * evbase, register struct wo
          * Parent process *
          ******************/
         /* We need to reuse existing if we lost a child */
+		/* TODO fix this to use a hash table (keyed by pid) for the children instead of a list */
         worker = NULL;
         do {
             if (child > 0) {
@@ -408,6 +436,17 @@ error:
     return NULL;
 }
 
+int mod_conf_init(void) {
+	/* perl for global config reading */
+	mod_perl_reinit();
+	return 0;
+}
+
+int mod_conf_shutdown(void) {
+	mod_perl_shutdown();
+	return 0;
+}
+
 int mod_initialize(struct event_base * evbase)
 {
     struct worker * worker;
@@ -445,6 +484,11 @@ const char * mod_conf_get(const char * key)
     size_t len = strlen(key);
     return mod_perl_conf_get(key, len);
 }
+
+void mod_conf_servers(void (*cb)(struct server *)) {
+	mod_perl_conf_servers(cb);
+}
+
 void mod_conf_foreach(const char * key, void (*cb)(const char * key, const char * val))
 {
     size_t len = strlen(key);

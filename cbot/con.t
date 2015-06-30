@@ -1,6 +1,8 @@
 #ifndef CON_HEADER_TYPE__H_
 #define CON_HEADER_TYPE__H_
 
+#define CON_READ_TIMEOUT 300
+
 enum con_state {
     CS_DISCONNECTED = 1 << 0,
     CS_RECONNECTING = 1 << 1,

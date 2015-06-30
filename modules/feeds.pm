@@ -6,14 +6,29 @@ use strict;
 use warnings;
 
 #use lib '/home/dead/perl5/lib/perl5';
-use blib './IRC';
+#use blib './IRC';
 use XML::LibXML;
 use LWP::UserAgent;
 use HTML::Entities;
+use Cache::FastMmap;
 
-our $XML_PARSER;
-our $LAST; #paging
-our %feeds;
+use mod_perl::modules::utils;
+
+my $XML_PARSER;
+my %feeds;
+
+# Init our inter-process shared cache which we use
+# to store the results from the last query (if its the same feed)
+my $share_file_name = '/tmp/.feeds.sharefile.tmp.@@@';
+unless (-e $share_file_name) {
+	open(my $fh, ">", $share_file_name) or warn "Failed to initialize shared memory: $!\n";
+	$fh && close($fh);
+}
+my $cache = Cache::FastMmap->new(
+	share_file => $share_file_name,
+	init_file => 0,
+	unlink_on_exit => 1
+);
 
 # Register our run command
 mod_perl::commands::register_command('feeds', \&run);
@@ -103,24 +118,7 @@ sub feeds_lookup
 
 	# Handle paging requests (repeated lookup for same feed, shows more results, no further lookups)
 	my @items = ();
-	if ($last->{feed} eq $feed) {
-		$last->{count} += 5;
-		if ($last->{items}) {
-			@items = @{$last->{items}};
-		} else {
-			my $doc = feeds_getXMLdoc($irc, $feeds{$feed}->{source});
-			return if !$doc;
-			@items = $doc->getElementsByTagName('item');
-			if (!@items) {
-				$irc->say("[error] Malformed XML received, can't continue");
-				return;
-			}
-			$last->{items} = \@items;
-		}
-	} else {
-		$last->{count} = 0;
-		$last->{feed} = $feed;
-
+	my $lookup_call = sub {
 		my $doc = feeds_getXMLdoc($irc, $feeds{$feed}->{source});
 		return if !$doc;
 		@items = $doc->getElementsByTagName('item');
@@ -128,16 +126,37 @@ sub feeds_lookup
 			$irc->say("[error] Malformed XML received, can't continue");
 			return;
 		}
+		@items = map {
+			my $title = decode_entities($_->find('title'));
+			my $link  = decode_entities($_->find('link'));
+			$link = mod_perl::modules::utils::tinyurl($link);
+			"* $title ::  $link";
+		} @items;
+	};
 
-		# Store for next query if same
-		$last->{items} = \@items;
+	if ($last->{feed} eq $feed) {
+		$last->{count} += 5;
+		if ($last->{items}) {
+			@items = @{$last->{items}};
+		} else {
+			$lookup_call->();
+		}
+	} else {
+		$last->{count} = 0;
+		$last->{feed} = $feed;
+
+		$lookup_call->();
 	}
 
 	# Went over max, start at beginning..
 	if ($last->{count} >= @items) {
 		$last->{count} = 0;
-		$last->{items} = [];
 	}
+
+	# Update cache now
+	$cache->set("last_metadata", $last);
+	$cache->set("last_results", \@items) or warn "feeds: unable to store last_results\n";
+
 	my $current = $last->{count};
 	my $max_current = $current+5 > @items ? @items : $current+5;
 
@@ -145,10 +164,7 @@ sub feeds_lookup
 	if (@citems) {
 		$irc->say("[$feeds{$feed}->{title}] -> showing $current-$max_current (".scalar(@items).")");
 		foreach my $item (@citems) {
-			my $title = decode_entities($item->find('title'));
-			my $link  = decode_entities($item->find('link'));
-			next if (!$link || !$title);
-			$irc->say("* $title ::  $link");
+			$irc->say($item);
 		}
 	}
 }
@@ -175,8 +191,13 @@ sub run
 	}
 
 	# Initialize our paging system, if needed
-	if (!ref($LAST)) {
-		$LAST = {feed => '', count => 0, items => []};
+	my $last = $cache->get("last_metadata");
+	if (!ref($last)) {
+		$last = {feed => '', count => 0};
+		$cache->set("last_metadata", $last);
+		$cache->set("last_results", []);
+	} else {
+		$last->{items} = $cache->get("last_results");
 	}
 
 	if ($opt{add}) {
@@ -192,7 +213,7 @@ sub run
 
 	foreach my $f (@argv) {
 		$f = lc($f);
-		feeds_lookup($irc, $f, $LAST);
+		feeds_lookup($irc, $f, $last);
 	}
 }
 

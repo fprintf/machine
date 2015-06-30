@@ -96,7 +96,7 @@ sub run
 	my $fmt = "%-6s %7.2f %-+6.2f %10.2f %-10.2f %15s";
 	$msg->say(sprintf($hfmt, "symbol", "price", "change", "ylow", "yhigh", "drange"));
 	foreach my $s (@data) {
-		$msg->say(sprintf($fmt, "$s->{symbol}",$s->{LastTradePriceOnly},$s->{ChangeRealtime},$s->{YearLow},$s->{YearHigh},$s->{DaysRange}));
+		$msg->say(sprintf($fmt, "$s->{symbol}",$s->{LastTradePriceOnly},$s->{Change},$s->{YearLow},$s->{YearHigh},$s->{DaysRange}));
 	}
 }
 

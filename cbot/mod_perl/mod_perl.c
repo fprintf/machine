@@ -160,6 +160,11 @@ void mod_perl_reinit(void)
     mod_perl_reinit_state(&mp_state);
 }
 
+void mod_perl_shutdown(void)
+{
+    mod_perl_destroy(&mp_state);
+}
+
 /* Get config value (returns a const string) */
 const char * mod_perl_conf_get(const char * key, size_t len)
 {
@@ -170,7 +175,7 @@ const char * mod_perl_conf_get(const char * key, size_t len)
     if (!hv) {
         fprintf(stderr,"Error, %%mod_perl::config::conf hash not found!\n");
     } else {
-        SV ** entry = hv_fetch(hv, key, (I32)len, 0);
+        SV ** entry = hv_fetch(hv, key, len, 0);
 
         /* Get the string in the SV** */
         if (entry && SvPOKp(*entry))
@@ -180,6 +185,90 @@ const char * mod_perl_conf_get(const char * key, size_t len)
     return p;
 }
 
+static const char * hash_getstr(HV * hash, const char * key) {
+	SV ** entry = hv_fetch(hash, key, strlen(key), 0);
+	if (!entry || !SvPOK(*entry)) {
+		log_debug("Missing %s fatal error.", key);
+		return NULL;
+	}
+
+	return SvPV_nolen(*entry);
+}
+
+static int hash_getint(HV * hash, const char * key) {
+	SV ** entry = hv_fetch(hash, key, strlen(key), 0);
+	if (!entry || !SvIOK(*entry)) {
+		log_debug("Missing %s fatal error.", key);
+		return 0;
+	}
+
+	return SvIV(*entry);
+}
+
+/*
+ * Translate the key/values from the server hash
+ * into a struct, returns an initialized struct
+ * fill with the values from the server hash or
+ * an empty one with all members NULL/0 if there
+ * are any failures.
+ */
+static struct server * mod_perl_conf_server(HV * hash) {
+	struct server * server;
+
+	if ( !(server = malloc(sizeof *server)) ) 
+		return server;
+
+	/* Ensure an empty object before we start assigning */
+	*server = (struct server){};
+	server->host = hash_getstr(hash, "host");
+	server->port = hash_getint(hash, "port");
+	server->use_ssl = hash_getint(hash, "ssl");
+
+	server->nick = hash_getstr(hash, "nick");
+	server->user = hash_getstr(hash, "user");
+
+	return server;
+}
+
+/*
+ * Read the servers list from the config and run our hooks 
+ */
+void mod_perl_conf_servers(void (*cb)(struct server *)) {
+	const char * evalstr = "$" MOD_PERL_CONF_NAME "{servers}";
+	//log_debug("running perl [%s]\n", evalstr);
+	SV * ref = eval_pv(evalstr, 1);
+
+	if (!ref || !SvROK(ref)) {
+		fprintf(stderr, "Error: scalar returned from mod_perl_conf_servers() was not a reference\n");
+		return;
+	}
+
+	/* Process each member of the server list and call our callback with a fully
+	 * constructed 'struct server_conf' object we derive from the servers in the 
+	 * server list
+	 */
+	HV * hash = (HV *)SvRV(ref);
+	int32_t i, key_count = hv_iterinit(hash);
+    for (i = 0; i < key_count; ++i) {
+		char * key = NULL;
+		int32_t keylen = 0;
+		ref = hv_iternextsv(hash, &key, &keylen);
+
+		/* If we got a hashref, build an object from its values and pass it to the callback */
+		if (SvROK(ref)) {
+			/* CALLER MUST FREE server object! */
+			struct server * server = mod_perl_conf_server( (HV *)SvRV(ref) );
+			cb(server);
+		}
+	}
+
+}
+
+
+/*
+ * DEPRECATED
+ * DO NOT USE will be removing this function entirely after i am done referencing it
+ */
 void mod_perl_conf_foreach(const char * key, size_t len, void (*cb)(const char * key, const char * val))
 {
     HV * hv = get_hv(MOD_PERL_CONF_NAME, 0);
@@ -190,7 +279,7 @@ void mod_perl_conf_foreach(const char * key, size_t len, void (*cb)(const char *
 
     if (!hv)
         return;
-    entry = hv_fetch(hv, key, (I32)len, 0);
+    entry = hv_fetch(hv, key, len, 0);
 
     if (entry && SvROK(*entry)) {
         switch(SvTYPE(SvRV(*entry))){
@@ -217,7 +306,7 @@ void mod_perl_conf_foreach(const char * key, size_t len, void (*cb)(const char *
 
                 for (hv_iterinit(hash), he = hv_iternext(hash); he; he = hv_iternext(hash)) {
                     size_t len;
-                    char * key = hv_iterkey(he, (I32*)&len);
+                    char * key = hv_iterkey(he, (I32 *)&len);
                     SV * sv = hv_iterval(hash, he);
                     const char * val = NULL;
 

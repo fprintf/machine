@@ -37,9 +37,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "mod.h"    /* module interface */
 #include "log.h"
 
-/* So we can update our user information */
-#include "common.h"
-
 
 enum irc_modes {
     IRC_M_NONE,
@@ -59,7 +56,7 @@ static const struct irc {
 /*  Getters */
 static char * irc_target(struct irc * irc) 
 { 
-    struct context * ctx = Con.userdata(irc->con, NULL);
+    struct server * ctx = Con.userdata(irc->con, NULL);
     if (Msg.argv(irc->msg,0))
         return !strcmp(Msg.argv(irc->msg,0),ctx->nick) ? Msg.nick(irc->msg) : Msg.argv(irc->msg,0);
     else
@@ -95,11 +92,17 @@ static int irc_callback(struct irc * event)
             break;
 
         case IRC_NUMERIC:
+			if (irc_numeric(event) == 1) {
+				/* TODO Join the channels for this server */
+			}
+
             mod_dispatch(event);
             break;
 
         case IRC_MODE:
             mod_dispatch(event);
+#if 0 
+			/* FIXME Got a segfault happening here, probably in the strcmp() or the Msg.fdump() */
             /* My mode changed, update it */
             if (0 == strcmp(Msg.argv(event->msg, 0), gconfig.nick)) {
                 Msg.fdump(event->msg, stdout);
@@ -107,6 +110,7 @@ static int irc_callback(struct irc * event)
                 /* Determine mode and set new event->modes */
                 /* TODO */
             }
+#endif
             break;
 
         case IRC_PING:
@@ -185,68 +189,68 @@ static struct irc * irc_dispatch(const char * line, struct con * con)
 }
 
 /* Output commands */
-static int raw(struct irc * irc, const char * msg) { return printf("S%lu %s\n", irc->cid, msg); }
+static int raw(struct irc * irc, const char * msg) { return printf("S%lu %s\n", irc_cid(irc), msg); }
 static int privmsg(struct irc * irc, const char * target, const char * msg) 
 { 
-    return printf("S%lu PRIVMSG %s :%s\n", irc->cid, target, msg); 
+    return printf("S%lu PRIVMSG %s :%s\n", irc_cid(irc), target, msg); 
 }
 static int cprivmsg(struct irc * irc, const char * target, const char * channel, const char * msg) 
 { 
-    return printf("S%lu CPRIVMSG %s %s :%s\n", irc->cid, target, channel,msg); 
+    return printf("S%lu CPRIVMSG %s %s :%s\n", irc_cid(irc), target, channel,msg); 
 }
 static int notice(struct irc * irc, const char * target, const char * msg) 
 { 
-    return printf("S%lu NOTICE %s :%s\n", irc->cid, target, msg); 
+    return printf("S%lu NOTICE %s :%s\n", irc_cid(irc), target, msg); 
 }
 static int say(struct irc * irc, const char * msg) 
 { 
-    return printf("S%lu PRIVMSG %s :%s\n", irc->cid, !strncmp(Msg.argv(irc->msg,0),"#",1) ? Msg.argv(irc->msg,0) : Msg.nick(irc->msg), msg); 
+    return printf("S%lu PRIVMSG %s :%s\n", irc_cid(irc), !strncmp(Msg.argv(irc->msg,0),"#",1) ? Msg.argv(irc->msg,0) : Msg.nick(irc->msg), msg); 
 }
 
 
 /* Channel commands */
 static int join(struct irc * irc, const char * target)
 {
-    return printf("S%lu JOIN %s\n", irc->cid, target);
+    return printf("S%lu JOIN %s\n", irc_cid(irc), target);
 }
 
 static int joinkeys(struct irc * irc, const char * target, const char * keys)
 {
-    return printf("S%lu JOIN %s %s\n", irc->cid, target, keys);
+    return printf("S%lu JOIN %s %s\n", irc_cid(irc), target, keys);
 }
 
 static int part(struct irc * irc, const char * target, const char * msg)
 {
-    return printf("S%lu PART %s %s\n", irc->cid, target, msg ? msg : "");
+    return printf("S%lu PART %s %s\n", irc_cid(irc), target, msg ? msg : "");
 }
 
 static int topic(struct irc * irc, const char * target, const char *msg)
 {
-    return printf("S%lu TOPIC %s :%s\n", irc->cid, target, msg);
+    return printf("S%lu TOPIC %s :%s\n", irc_cid(irc), target, msg);
 }
 
 static int mode(struct irc * irc, const char * target, const char * flags, const char * args)
 {
-    return printf("S%lu MODE %s %s :%s\n", irc->cid, target, flags, args);
+    return printf("S%lu MODE %s %s :%s\n", irc_cid(irc), target, flags, args);
 }
 
 static int kick(struct irc * irc, const char * target, const char * ktarget, const char * msg)
 {
-    return printf("S%lu KICK %s %s :%s\n", irc->cid, target, ktarget, msg);
+    return printf("S%lu KICK %s %s :%s\n", irc_cid(irc), target, ktarget, msg);
 }
 
 /* Info lookup */
 static int whois(struct irc * irc, const char * target)
 {
-    return printf("S%lu WHOIS %s\n", irc->cid, target);
+    return printf("S%lu WHOIS %s\n", irc_cid(irc), target);
 }
 static int who(struct irc * irc, const char * mask)
 {
-    return printf("S%lu WHO %s\n", irc->cid, mask);
+    return printf("S%lu WHO %s\n", irc_cid(irc), mask);
 }
 static int userhost(struct irc * irc, const char * users)
 {
-    return printf("S%lu USERHOST %s\n", irc->cid, users);
+    return printf("S%lu USERHOST %s\n", irc_cid(irc), users);
 }
 
 /* Management commands */

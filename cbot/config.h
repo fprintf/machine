@@ -17,6 +17,10 @@ struct server {
     bool use_password;
     bool use_knock;    /* Server requires a knock sequence to open the 'port' above! */
     const char * knock_sequence; /* This will contain a list of space separated ports to knock to open the port above */
+
+	/* identity info */
+    const char * nick; // nickname to use on the server
+    const char * user;  // user/realname to use on the server;
 };
 
 

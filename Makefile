@@ -1,7 +1,14 @@
-dirs = cbot 
+TARGETS := 
+CLEAN :=
 
-all: $(dirs)
-	cd $^; make
+all: targets
 
-clean: $(dirs)
-	cd $^; make clean
+# Include all the subdirs Rules.mk files
+d  :=  cbot
+include $(d)/Rules.mk
+
+.PHONY: targets clean
+targets: $(TARGETS)
+
+clean: 
+	$(RM) -f $(CLEAN)
