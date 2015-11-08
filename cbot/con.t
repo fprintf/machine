@@ -15,6 +15,7 @@ struct con_cb {
 struct con {
     unsigned long id;
     struct bufferevent * bev;
+    struct event * tev;           /* timeout event, waits for read timeouts to happen */
     struct evdns_base * dnsbase;
     const char * host;
     int port;

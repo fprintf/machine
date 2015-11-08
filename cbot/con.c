@@ -20,6 +20,10 @@
 #include <openssl/rand.h>
 
 #include <stdarg.h>
+#include <unistd.h>  /* fcntl */
+#include <fcntl.h>   /* fcntl */
+#include <errno.h>   /* errno variable */
+#include <stdio.h>   /* fprintf */
 
 #include "con.h"
 #include "con.t"
@@ -31,6 +35,7 @@
 static void con_read_callback(struct bufferevent * bev, void * arg);
 static void con_write_callback(struct bufferevent * bev, void * arg) { /*nothing here */; }
 static void con_event_callback(struct bufferevent * bev, short events, void * arg);
+static void con_timeout_callback(evutil_socket_t fd, short events, void * arg);
 
 static const struct con con_initializer = {
     .dnsbase = NULL,
@@ -46,6 +51,21 @@ static const struct con con_initializer = {
 };
 
 static unsigned int long con_id_track;
+
+/*
+ * UTIL FUNCTIONS
+ */
+static evutil_socket_t get_nonblocking_socket(void) {
+	evutil_socket_t sock = socket(AF_INET, SOCK_STREAM, 0);
+
+	/* failure to setup socket */
+	if (sock == -1 || fcntl(sock, F_SETFL, O_NONBLOCK) == -1) {
+		fprintf(stderr, "System error: %s\n", strerror(errno));
+		sock = -1;
+	}
+
+	return sock;
+}
 
 /*
  * Inits SSL framework and also creates/returns
@@ -149,6 +169,7 @@ void con_free(struct con * con)
         }
         bufferevent_free(con->bev); /* frees ssl object */
         con->bev = NULL;
+		event_free(con->tev);
 
         /* Free (possibly) shared objects */
         evdns_base_free(con->dnsbase, 1); con->dnsbase = NULL;
@@ -171,6 +192,8 @@ int con_connect(struct con * con, struct event_base * evbase)
     int success = 0;
 
     do {
+		evutil_socket_t sockfd = get_nonblocking_socket();
+
         /* SSL enabled */
         if (con->flags & CF_SSL) {
             /* Init SSL and get our SSL_CTX (TODO check error stack) */
@@ -183,15 +206,15 @@ int con_connect(struct con * con, struct event_base * evbase)
                 break;
 
             bev = bufferevent_openssl_socket_new(evbase, 
-                    -1, 
+                    sockfd,
                     con->ssl, 
                     BUFFEREVENT_SSL_CONNECTING, 
                     BEV_OPT_CLOSE_ON_FREE
                     );
-        } 
         /* NON SSL */
-        else 
-            bev = bufferevent_socket_new(evbase, -1, BEV_OPT_CLOSE_ON_FREE);
+        } else  {
+            bev = bufferevent_socket_new(evbase, sockfd, BEV_OPT_CLOSE_ON_FREE);
+		}
 
         /* TODO: check error stack here */
         if (!bev) 
@@ -209,6 +232,10 @@ int con_connect(struct con * con, struct event_base * evbase)
         /* Actually fire off the connect request. We need to actually have
          * an event base dispatched before anything happens here.. */
         bufferevent_socket_connect_hostname(bev, con->dnsbase, AF_UNSPEC, con->host, con->port);
+
+		/* Create a read timeout so we can fire if we don't get any data for a long time */
+		con->tev = event_new(evbase, sockfd, EV_TIMEOUT|EV_READ|EV_PERSIST, con_timeout_callback, con);
+		event_add(con->tev, &(struct timeval){ .tv_sec = 300 });
 
         /* Done */
         success = 1;
@@ -414,6 +441,16 @@ static void con_read_callback(struct bufferevent * bev, void * arg)
         if (!cont)
             break;
     }
+}
+
+/*
+ * libevent 'timeout' callback (does nothing, callback should be handled by the con_event_callback below)
+ */
+static void con_timeout_callback(evutil_socket_t fd, short events, void * arg)
+{
+	if (events & EV_TIMEOUT) 
+		fprintf(stderr, "timeout called for %d\n", fd);
+	return;
 }
 
 /* 
