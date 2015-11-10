@@ -192,7 +192,7 @@ int con_connect(struct con * con, struct event_base * evbase)
         /* NON SSL */
         } else  {
             bev = bufferevent_socket_new(evbase, -1, BEV_OPT_CLOSE_ON_FREE);
-		}
+        }
 
         /* TODO: check error stack here */
         if (!bev) 
