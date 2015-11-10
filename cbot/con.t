@@ -1,6 +1,8 @@
 #ifndef CON_HEADER_TYPE__H_
 #define CON_HEADER_TYPE__H_
 
+#define CON_READ_TIMEOUT 300
+
 enum con_state {
     CS_DISCONNECTED = 1 << 0,
     CS_RECONNECTING = 1 << 1,
@@ -15,7 +17,6 @@ struct con_cb {
 struct con {
     unsigned long id;
     struct bufferevent * bev;
-    struct event * tev;           /* timeout event, waits for read timeouts to happen */
     struct evdns_base * dnsbase;
     const char * host;
     int port;

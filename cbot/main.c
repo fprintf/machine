@@ -86,7 +86,7 @@ int main(int argc, char ** argv)
         flags |= CF_SSL;
     }
 
-    ctx.nick = "thisiscool";
+    ctx.nick = "machine";
     ctx.user = "iz-bot";
     ctx.usermsg = "goto test;";
 

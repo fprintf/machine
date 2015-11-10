@@ -169,7 +169,7 @@ void con_free(struct con * con)
         }
         bufferevent_free(con->bev); /* frees ssl object */
         con->bev = NULL;
-		event_free(con->tev);
+		//event_free(con->tev);
 
         /* Free (possibly) shared objects */
         evdns_base_free(con->dnsbase, 1); con->dnsbase = NULL;
@@ -192,8 +192,6 @@ int con_connect(struct con * con, struct event_base * evbase)
     int success = 0;
 
     do {
-		evutil_socket_t sockfd = get_nonblocking_socket();
-
         /* SSL enabled */
         if (con->flags & CF_SSL) {
             /* Init SSL and get our SSL_CTX (TODO check error stack) */
@@ -206,14 +204,14 @@ int con_connect(struct con * con, struct event_base * evbase)
                 break;
 
             bev = bufferevent_openssl_socket_new(evbase, 
-                    sockfd,
+                    -1,
                     con->ssl, 
                     BUFFEREVENT_SSL_CONNECTING, 
                     BEV_OPT_CLOSE_ON_FREE
                     );
         /* NON SSL */
         } else  {
-            bev = bufferevent_socket_new(evbase, sockfd, BEV_OPT_CLOSE_ON_FREE);
+            bev = bufferevent_socket_new(evbase, -1, BEV_OPT_CLOSE_ON_FREE);
 		}
 
         /* TODO: check error stack here */
@@ -228,18 +226,16 @@ int con_connect(struct con * con, struct event_base * evbase)
         /* Establish callbacks (make con object the argument) */
         bufferevent_setcb(bev, con_read_callback, con_write_callback, con_event_callback, con);
         bufferevent_enable(bev, EV_READ|EV_WRITE);
+        /* Set the read timeout on the socket so if we stop getting data for this long, restart */
+        bufferevent_set_timeouts(bev, &(struct timeval){.tv_sec = CON_READ_TIMEOUT}, NULL);
 
         /* Actually fire off the connect request. We need to actually have
          * an event base dispatched before anything happens here.. */
         bufferevent_socket_connect_hostname(bev, con->dnsbase, AF_UNSPEC, con->host, con->port);
 
-		/* Create a read timeout so we can fire if we don't get any data for a long time */
-		con->tev = event_new(evbase, sockfd, EV_TIMEOUT|EV_READ|EV_PERSIST, con_timeout_callback, con);
-		event_add(con->tev, &(struct timeval){ .tv_sec = 300 });
-
         /* Done */
         success = 1;
-    }while(0);
+    } while(0);
 
     return success;
 }
@@ -513,7 +509,7 @@ static void con_event_callback(struct bufferevent *bev, short events, void * arg
             con_dispatch_event(con, CON_EVENT_ERROR, con->userdata);
 
 
-            /* We weren't unable to restore the connect, clean up */
+            /* We weren't able to restore the connect, clean up */
             fprintf(stderr, "Connection closed due to error\n");
             bufferevent_free(con->bev);
             con->bev = NULL; /* MUST SET TO NULL, TO AVOID DUPLICATE FREE */

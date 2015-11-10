@@ -85,4 +85,9 @@ sub QUIT
 #    event_handler('NOTICE', $msg);
 }
 
+sub raw_485 {
+	my $msg = shift;
+	print STDERR "485 ".$msg->text."\n";
+}
+
 1;
