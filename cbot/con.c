@@ -20,10 +20,6 @@
 #include <openssl/rand.h>
 
 #include <stdarg.h>
-#include <unistd.h>  /* fcntl */
-#include <fcntl.h>   /* fcntl */
-#include <errno.h>   /* errno variable */
-#include <stdio.h>   /* fprintf */
 
 #include "con.h"
 #include "con.t"
@@ -50,21 +46,6 @@ static const struct con con_initializer = {
 };
 
 static unsigned int long con_id_track;
-
-/*
- * UTIL FUNCTIONS
- */
-static evutil_socket_t get_nonblocking_socket(void) {
-	evutil_socket_t sock = socket(AF_INET, SOCK_STREAM, 0);
-
-	/* failure to setup socket */
-	if (sock == -1 || fcntl(sock, F_SETFL, O_NONBLOCK) == -1) {
-		fprintf(stderr, "System error: %s\n", strerror(errno));
-		sock = -1;
-	}
-
-	return sock;
-}
 
 /*
  * Inits SSL framework and also creates/returns
