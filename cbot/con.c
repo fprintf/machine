@@ -35,7 +35,6 @@
 static void con_read_callback(struct bufferevent * bev, void * arg);
 static void con_write_callback(struct bufferevent * bev, void * arg) { /*nothing here */; }
 static void con_event_callback(struct bufferevent * bev, short events, void * arg);
-static void con_timeout_callback(evutil_socket_t fd, short events, void * arg);
 
 static const struct con con_initializer = {
     .dnsbase = NULL,
@@ -437,16 +436,6 @@ static void con_read_callback(struct bufferevent * bev, void * arg)
         if (!cont)
             break;
     }
-}
-
-/*
- * libevent 'timeout' callback (does nothing, callback should be handled by the con_event_callback below)
- */
-static void con_timeout_callback(evutil_socket_t fd, short events, void * arg)
-{
-	if (events & EV_TIMEOUT) 
-		fprintf(stderr, "timeout called for %d\n", fd);
-	return;
 }
 
 /* 
