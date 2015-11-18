@@ -106,7 +106,7 @@ static void parent_sig_callback(evutil_socket_t sig, short what, void * data)
             event_base_loopexit(list->main_evbase, NULL);
             break;
         case SIGHUP:
-            log_debug("parent [%d] caught SIGHUP restarting children...", getpid());
+            log_debug("parent [%d] caught SIGHUP exiting...", getpid());
             event_base_loopexit(list->main_evbase, NULL);
             break;
         case SIGCHLD:
@@ -212,7 +212,7 @@ static void parent_event_callback(struct bufferevent * bev, void * data)
         //    log_debug("vector: %p cidindex: %p parent read line [%s] to CID: [%lu]", gconfig.servers, vector.index(gconfig.servers, cid), line + consumed, cid);
             con = vector.index(gconfig.servers, cid);
             if (con) {
-                log_debug("parent sending [%s] to CID: [%lu]", line + consumed, cid);
+//                log_debug("parent sending [%s] to CID: [%lu]", line + consumed, cid);
                 Con.puts(con, line + consumed);
             } else {
                 log_debug("Trying to send to invalid server CID: %lu message: %s\n", cid, line + consumed);
@@ -408,6 +408,17 @@ error:
     return NULL;
 }
 
+int mod_conf_init(void) {
+	/* perl for global config reading */
+	mod_perl_reinit();
+	return 0;
+}
+
+int mod_conf_shutdown(void) {
+	mod_perl_shutdown();
+	return 0;
+}
+
 int mod_initialize(struct event_base * evbase)
 {
     struct worker * worker;
@@ -445,6 +456,11 @@ const char * mod_conf_get(const char * key)
     size_t len = strlen(key);
     return mod_perl_conf_get(key, len);
 }
+
+void mod_conf_servers(void (*cb)(struct server *)) {
+	mod_perl_conf_servers(cb);
+}
+
 void mod_conf_foreach(const char * key, void (*cb)(const char * key, const char * val))
 {
     size_t len = strlen(key);

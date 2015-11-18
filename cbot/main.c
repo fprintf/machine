@@ -33,7 +33,7 @@
 
 #include <irc.h> /* includes con.h also */
 #include <mod.h> /* for mod_initialize() which parses our config also */
-#include <common.h>
+#include <log.h>
 
 int readcb(struct con * con, const char * s, void * userdata)
 {
@@ -45,12 +45,12 @@ int readcb(struct con * con, const char * s, void * userdata)
 
 int eventcb(struct con * con, short event, void * userdata)
 {
-    struct context * ctx = userdata;
+    struct server * server = userdata;
 
     switch(event) {
         case CON_EVENT_CONNECTED:
-            Con.printf(con, "USER %s %s * :%s\r\n", ctx->nick, ctx->user, ctx->usermsg);
-            Con.printf(con, "NICK %s\r\n", ctx->nick);
+            Con.printf(con, "USER %s %s * :%s\r\n", server->nick, server->user, "machine-0.666");
+            Con.printf(con, "NICK %s\r\n", server->nick);
             break;
         case CON_EVENT_EOF:
             fprintf(stderr, "Disconnected...?\n");
@@ -59,61 +59,63 @@ int eventcb(struct con * con, short event, void * userdata)
     return 1;
 }
 
-void sigcallback(evutil_socket_t fd, short signum, void * arg)
-{
-    struct event_base * evbase = arg;
-    fprintf(stderr, "Got interrupt..closing\n");
-    event_base_loopexit(evbase, NULL);
+
+void servercb(struct server * server) {
+    enum con_flags flags = CF_RECONNECT;
+    struct con * con;
+
+	log_debug("[cxn] host: %s port: %d ssl: %d nick: %s user: %s\n",
+			server->host, server->port, server->use_ssl, server->nick, server->user
+	);
+
+	if (server->use_ssl)
+		flags |= CF_SSL;
+	con = Con.new(server->host, server->port, flags, server);
+	Con.callbacks(con, readcb, NULL, eventcb);
+	Con.connect(con, gconfig.evbase);
+
+	/* TODO TODO TODO
+	 * NOTE: 'server' here is allocated and we need to free it, but we can't
+	 yet, we need to keep track of it and free it later. The solution is to
+	 add the con pointer into free and add the server item to the list
+	 instead of the con (below) but we need to rewrite some things to make
+	 that possible first, no biggie really but I just have to get around to it
+	 */
+
+	vector.push(gconfig.servers, con);
 }
 
 int main(int argc, char ** argv)
 {
-//    struct event * evsig;
-
-    struct con * server;
-    enum con_flags flags = CF_RECONNECT;
-
-    struct context ctx;
-
-
-    if (argc < 3) {
-        fprintf(stderr,"usage: %s <host> <port> [use_ssl]\n", argv[0]);
-        return 1;
-    }
-
-    /* Use ssl also */
-    if (argc == 4) {
-        flags |= CF_SSL;
-    }
-
-    ctx.nick = "machine";
-    ctx.user = "iz-bot";
-    ctx.usermsg = "goto test;";
-
+	/* Initialize our global event base and server list */
     gconfig.servers = vector.new(0);
     gconfig.evbase  = event_base_new();
+
+	/* Load our perl workers */
     mod_initialize(gconfig.evbase);
-    /* Setup new connection and add our read callback */
-    server = Con.new(argv[1], atoi(argv[2]), flags, &ctx);
-    Con.callbacks(server, readcb, NULL, eventcb);
-    Con.connect(server, gconfig.evbase);
-    /* Add server to our global server vector */
-    vector.sindex(gconfig.servers, 0, server);
-    fprintf(stdout, "DBG index: 0 server: %p\n", vector.index(gconfig.servers, 0));
+
+	/* Read in the servers from the config */
+	mod_conf_init();
+	mod_conf_servers(servercb);
 
     /* Begin our loop */
     event_base_dispatch(gconfig.evbase);
 
     /* Cleanup */
-    Con.free(server);
+	/* TODO rewrite gconfig.servers to be a list of struct server objects
+	   so we can keep track of the config which is now not getting freed
+	   and is a memory leak (but a static one so not super big deal)
+	 */
     event_base_free(gconfig.evbase);
+	size_t i, max;
+	for (i = 0, max = vector.size(gconfig.servers); i < max; ++i) {
+		struct con * con = vector.index(gconfig.servers, i);
+		Con.free(con);
+	}
     vector.delete(gconfig.servers);
-    // FIXME THIS IS CAUSING SEGFAULTS
-    // FIXME It's actually workers_free()
-    // FIXME we need to fix shutdown..
-    // TODO Im already working on refactoring the code into its own file though
-    // in process hopefully will discover the bug
+
     mod_shutdown();
+
     puts("[--- Returning to OS control ---]");
 
     return 0;
