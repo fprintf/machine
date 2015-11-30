@@ -9,7 +9,7 @@
 #include <stdlib.h>      /* for exit() and etc.. */
 #include <string.h>      /* for strerror() */
 
-/* IPC/msg* routines */
+/* IPC/msg routines */
 #include <sys/types.h>
 #include <sys/wait.h>
 
