@@ -8,7 +8,7 @@ use warnings;
 use LWP::UserAgent;
 use XML::LibXML;
 use URI::Escape;
-use Encode;
+use Encode qw(decode encode);
 use HTML::Entities;
 
 my $wolfram_api = $mod_perl::config::conf{wolfram_api_url} || 
@@ -29,6 +29,7 @@ sub wolfram_getXMLdoc
 
 	my $doc = undef;
 	if ($r->is_success) {
+		print STDERR "debug:".$r->decoded_content."\n";
 		$doc = $XML_PARSER->load_xml(string => $r->decoded_content);
 	} else {
 		$irc->say("[error] Couldn't retrieve '$source': ".$r->status_line);
@@ -55,12 +56,23 @@ sub lookup {
 
 	my @pods = $doc->findnodes('//pod[@primary="true"]');
 	foreach my $pod (@pods) {
-		my $result = $pod->findvalue('subpod//plaintext');
-		$irc->say("[wolfram] ".$result);
+		if ($pod->getAttribute('title')) { 
+			$irc->say("[wolfram] ". $pod->getAttribute('title'));
+		}
+		my $result = decode('utf8', $pod->find('subpod//plaintext')->to_literal);
+		# Collapse newlines one line
+		$result =~ s/\r\n?/ | /g;
+		$irc->say(encode('utf8', $result));
 	}
 
 	if (!@pods) {
-		$irc->say("[error] Malformed XML received, can't continue");
+		my @didyoumean = $doc->findnodes('//didyoumean');
+		my $error = 'No results.';
+		if (@didyoumean) { 
+			$error = join(" ", "Did you mean:", $didyoumean[0]->to_literal, "?"); 
+		}
+
+		$irc->say($error);
 		return;
 	}
 }
