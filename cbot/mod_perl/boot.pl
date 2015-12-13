@@ -96,4 +96,14 @@ sub raw_485 {
 	print STDERR "485 ".$msg->text."\n";
 }
 
+sub raw_477 {
+	my $msg = shift;
+	print STDERR $msg->text(), "\n";
+}
+
+sub raw_350 {
+	my $msg = shift;
+	print STDERR $msg->text(), "\n";
+}
+
 1;

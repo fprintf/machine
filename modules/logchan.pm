@@ -23,11 +23,12 @@ sub logchan_handler {
     my ($irc) = @_;
 
 	my $source = $irc->servername . ":" . $irc->target;
+	print STDERR "checking routes for $source\n";
 	my $entries = $logchan_routes{$source};
 	if ($entries && @$entries) {
 		foreach my $dest (@$entries) {
 			my ($server, $target) = split(/:/, $dest, 2);
-#			print STDERR "sending message to $server $target :".$irc->text."\n";
+			print STDERR "sending message to $server $target :".$irc->text."\n";
 			$irc->privmsg_server($server, $target, "[$source] <".$irc->nick."> " . $irc->text);
 		}
 	}

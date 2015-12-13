@@ -55,9 +55,11 @@ static const struct irc {
 static char * irc_target(struct irc * irc) 
 { 
     struct server * ctx = irc->server;
-    if (Msg.argv(irc->msg,0))
-        return !strcmp(Msg.argv(irc->msg,0),ctx->nick) ? Msg.nick(irc->msg) : Msg.argv(irc->msg,0);
-    else
+    if (Msg.argv(irc->msg,0)) {
+		const char * empty = "";
+		const char * test = ctx ? ctx->nick : empty;
+        return !strcmp(Msg.argv(irc->msg,0),test) ? Msg.nick(irc->msg) : Msg.argv(irc->msg,0);
+	} else
         return Msg.text(irc->msg);
 } /* nick or channel this was directed too */
 static char * irc_text(struct irc * irc) { return Msg.text(irc->msg); } /* nick or channel this was directed too */
