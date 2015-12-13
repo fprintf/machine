@@ -211,15 +211,17 @@ static int hash_getint(HV * hash, const char * key) {
  * fill with the values from the server hash or
  * an empty one with all members NULL/0 if there
  * are any failures.
+ * Caller is expected to make sure that 'name' is not
+ NULL and is a valid string
  */
-static struct server * mod_perl_conf_server(HV * hash) {
+static struct server * mod_perl_conf_server(HV * hash, const char * name) {
 	struct server * server;
 
 	if ( !(server = malloc(sizeof *server)) ) 
 		return server;
 
 	/* Ensure an empty object before we start assigning */
-	*server = (struct server){};
+	*server = (struct server){ .name = name };
 	server->host = hash_getstr(hash, "host");
 	server->port = hash_getint(hash, "port");
 	server->use_ssl = hash_getint(hash, "ssl");
@@ -244,20 +246,23 @@ void mod_perl_conf_servers(void (*cb)(struct server *)) {
 	}
 
 	/* Process each member of the server list and call our callback with a fully
-	 * constructed 'struct server_conf' object we derive from the servers in the 
+	 * constructed 'struct server' object we derive from the servers in the 
 	 * server list
 	 */
 	HV * hash = (HV *)SvRV(ref);
 	int32_t i, key_count = hv_iterinit(hash);
     for (i = 0; i < key_count; ++i) {
-		char * key = NULL;
-		int32_t keylen = 0;
-		ref = hv_iternextsv(hash, &key, &keylen);
+		char * name = NULL; 
+		int32_t namelen = 0;
+		/* TODO name is initialized by the call here so we may either need
+		   to copy it or free it manually (research this in perlapi)
+		 */
+		ref = hv_iternextsv(hash, &name, &namelen);
 
 		/* If we got a hashref, build an object from its values and pass it to the callback */
 		if (SvROK(ref)) {
 			/* CALLER MUST FREE server object! */
-			struct server * server = mod_perl_conf_server( (HV *)SvRV(ref) );
+			struct server * server = mod_perl_conf_server( (HV *)SvRV(ref), name );
 			cb(server);
 		}
 	}

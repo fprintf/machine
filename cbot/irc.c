@@ -47,16 +47,14 @@ enum irc_modes {
 };
 
 static const struct irc {
-    struct con * con; /* Con.userdata(con) should provide any user/nicknames we might care about */
+    struct server * server; /* Con.userdata(con) should provide any user/nicknames we might care about */
     struct ircmsg * msg;
-    const char * server; /* Name of the server this message is from, for identification */
-    unsigned long cid;   /* Connection ID  message came from */
 } irc_initializer; /* static, all NULL */
 
 /*  Getters */
 static char * irc_target(struct irc * irc) 
 { 
-    struct server * ctx = Con.userdata(irc->con, NULL);
+    struct server * ctx = irc->server;
     if (Msg.argv(irc->msg,0))
         return !strcmp(Msg.argv(irc->msg,0),ctx->nick) ? Msg.nick(irc->msg) : Msg.argv(irc->msg,0);
     else
@@ -68,12 +66,10 @@ static char * irc_real(struct irc * irc) { return Msg.real(irc->msg); }  /* retu
 static char * irc_host(struct irc * irc) { return Msg.host(irc->msg); }  /* returns host part of nick who sent this */
 static char * irc_command(struct irc * irc) { return Msg.command(irc->msg); }/* returns command name of this IRC message */
 static short irc_numeric(struct irc * irc) { return Msg.numeric(irc->msg); }/* returns numeric of this IRC message */
-static unsigned long irc_cid(struct irc * irc) { return Msg.cid(irc->msg); }  /* Return the connection cid for outgoing messages */
 static int irc_israw(struct irc * irc) { return (Msg.type(irc->msg) == IRC_NUMERIC); }/* returns numeric of this IRC message */
 static void irc_fdump(struct irc * irc, FILE * fp) { return Msg.fdump(irc->msg, fp); } /* dump message contents to FP */
 /* Set and get the server name for this connection */
-static const char * irc_setserver(struct irc * irc, const char * server) { return (irc->server = server); }
-static const char * irc_server(struct irc * irc) { return irc->server; }
+static char * irc_server(struct irc * irc) { return Msg.servername(irc->msg); }
 
 /*
  * Dispatch event to our modules/handlers
@@ -115,8 +111,8 @@ static int irc_callback(struct irc * event)
 
         case IRC_PING:
             /* Respond to ping as quickly as possible */
-            log_debug("Sending PONG response: S%lu PONG :%s", irc_cid(event), Msg.text(event->msg));
-            printf("S%lu PONG :%s\n", irc_cid(event), Msg.text(event->msg));
+            log_debug("Sending PONG response: S%s PONG :%s", irc_server(event), Msg.text(event->msg));
+            printf("S%s PONG :%s\n", irc_server(event), Msg.text(event->msg));
             break;
 
         case IRC_PRIVMSG:
@@ -144,14 +140,14 @@ static int irc_callback(struct irc * event)
 
 static void irc_free(struct irc * event); /* Forward declaration */
 
-static struct irc * irc_parse(const char * line, struct con * con)
+static struct irc * irc_parse(const char * line)
 {
     struct irc * event = NULL;
 
     if ( (event = malloc(sizeof *event)) ) {
         *event = irc_initializer;
-        event->con = con;
         event->msg = Msg.parse(line);
+		event->server = Msg.server(event->msg);
         if (!event->msg) {
             irc_free(event);
             event = NULL;
@@ -172,12 +168,12 @@ static void irc_free(struct irc * event)
     }
 }
 
-static struct irc * irc_dispatch(const char * line, struct con * con)
+static struct irc * irc_dispatch(const char * line)
 {
     struct irc * event = NULL;
     
     /* Process message */
-    event = irc_parse(line, con);
+    event = irc_parse(line);
     if (event) {
         irc_callback(event);
     } else {
@@ -189,68 +185,72 @@ static struct irc * irc_dispatch(const char * line, struct con * con)
 }
 
 /* Output commands */
-static int raw(struct irc * irc, const char * msg) { return printf("S%lu %s\n", irc_cid(irc), msg); }
+static int raw(struct irc * irc, const char * msg) { return printf("S%s %s\n", irc_server(irc), msg); }
+static int privmsg_server(struct irc * irc, const char * server, const char * target, const char * msg) 
+{ 
+    return printf("S%s PRIVMSG %s :%s\n", server, target, msg); 
+}
 static int privmsg(struct irc * irc, const char * target, const char * msg) 
 { 
-    return printf("S%lu PRIVMSG %s :%s\n", irc_cid(irc), target, msg); 
+    return printf("S%s PRIVMSG %s :%s\n", irc_server(irc), target, msg); 
 }
 static int cprivmsg(struct irc * irc, const char * target, const char * channel, const char * msg) 
 { 
-    return printf("S%lu CPRIVMSG %s %s :%s\n", irc_cid(irc), target, channel,msg); 
+    return printf("S%s CPRIVMSG %s %s :%s\n", irc_server(irc), target, channel,msg); 
 }
 static int notice(struct irc * irc, const char * target, const char * msg) 
 { 
-    return printf("S%lu NOTICE %s :%s\n", irc_cid(irc), target, msg); 
+    return printf("S%s NOTICE %s :%s\n", irc_server(irc), target, msg); 
 }
 static int say(struct irc * irc, const char * msg) 
 { 
-    return printf("S%lu PRIVMSG %s :%s\n", irc_cid(irc), !strncmp(Msg.argv(irc->msg,0),"#",1) ? Msg.argv(irc->msg,0) : Msg.nick(irc->msg), msg); 
+    return printf("S%s PRIVMSG %s :%s\n", irc_server(irc), !strncmp(Msg.argv(irc->msg,0),"#",1) ? Msg.argv(irc->msg,0) : Msg.nick(irc->msg), msg); 
 }
 
 
 /* Channel commands */
 static int join(struct irc * irc, const char * target)
 {
-    return printf("S%lu JOIN %s\n", irc_cid(irc), target);
+    return printf("S%s JOIN %s\n", irc_server(irc), target);
 }
 
 static int joinkeys(struct irc * irc, const char * target, const char * keys)
 {
-    return printf("S%lu JOIN %s %s\n", irc_cid(irc), target, keys);
+    return printf("S%s JOIN %s %s\n", irc_server(irc), target, keys);
 }
 
 static int part(struct irc * irc, const char * target, const char * msg)
 {
-    return printf("S%lu PART %s %s\n", irc_cid(irc), target, msg ? msg : "");
+    return printf("S%s PART %s %s\n", irc_server(irc), target, msg ? msg : "");
 }
 
 static int topic(struct irc * irc, const char * target, const char *msg)
 {
-    return printf("S%lu TOPIC %s :%s\n", irc_cid(irc), target, msg);
+    return printf("S%s TOPIC %s :%s\n", irc_server(irc), target, msg);
 }
 
 static int mode(struct irc * irc, const char * target, const char * flags, const char * args)
 {
-    return printf("S%lu MODE %s %s :%s\n", irc_cid(irc), target, flags, args);
+    return printf("S%s MODE %s %s :%s\n", irc_server(irc), target, flags, args);
 }
 
 static int kick(struct irc * irc, const char * target, const char * ktarget, const char * msg)
 {
-    return printf("S%lu KICK %s %s :%s\n", irc_cid(irc), target, ktarget, msg);
+    return printf("S%s KICK %s %s :%s\n", irc_server(irc), target, ktarget, msg);
 }
 
 /* Info lookup */
 static int whois(struct irc * irc, const char * target)
 {
-    return printf("S%lu WHOIS %s\n", irc_cid(irc), target);
+    return printf("S%s WHOIS %s\n", irc_server(irc), target);
 }
 static int who(struct irc * irc, const char * mask)
 {
-    return printf("S%lu WHO %s\n", irc_cid(irc), mask);
+    return printf("S%s WHO %s\n", irc_server(irc), mask);
 }
 static int userhost(struct irc * irc, const char * users)
 {
-    return printf("S%lu USERHOST %s\n", irc_cid(irc), users);
+    return printf("S%s USERHOST %s\n", irc_server(irc), users);
 }
 
 /* Management commands */
@@ -280,9 +280,7 @@ const struct irc_api irc = {
     .command = irc_command,
     .numeric = irc_numeric,
     .israw = irc_israw,
-    .cid = irc_cid,
     .server = irc_server,
-    .setserver = irc_setserver,
 
     .fdump = irc_fdump,
 
@@ -292,6 +290,7 @@ const struct irc_api irc = {
     /* Commands */
     .raw = raw,
     .privmsg = privmsg,
+    .privmsg_server = privmsg_server,
     .cprivmsg = cprivmsg,
     .notice = notice,
     .say = say,

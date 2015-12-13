@@ -442,15 +442,6 @@ static void con_event_callback(struct bufferevent *bev, short events, void * arg
             con_dispatch_event(con, CON_EVENT_CONNECTED, con->userdata);
             break; 
 
-        case CON_EVENT_EOF:
-            con->state |= CS_DISCONNECTED;
-
-            con_dispatch_event(con, CON_EVENT_EOF, con->userdata);
-            /* Connection closed, should we attempt to reconnect? */
-            if (con->flags & CF_RECONNECT && !con_reconnect(con)) 
-                fprintf(stderr, "Failed to reconnect, closing.\n");
-            break;
-
         case CON_EVENT_ERROR: ;
             int err;
             /* 
@@ -484,7 +475,19 @@ static void con_event_callback(struct bufferevent *bev, short events, void * arg
             bufferevent_free(con->bev);
             con->bev = NULL; /* MUST SET TO NULL, TO AVOID DUPLICATE FREE */
             con->ssl = NULL; /* MUST set to NULL, will be invalid now (see con_free) */
+
+			/* FALL THROUGH TO TRY AND RECONNECT */
+			/* vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv */
+
+        case CON_EVENT_EOF:
+            con->state |= CS_DISCONNECTED;
+
+            con_dispatch_event(con, CON_EVENT_EOF, con->userdata);
+            /* Connection closed, should we attempt to reconnect? */
+            if (con->flags & CF_RECONNECT && !con_reconnect(con)) 
+                fprintf(stderr, "Failed to reconnect, closing.\n");
             break;
+
 
         default:
             fprintf(stderr, "INVALID EVENT, SHOULD NEVER HAPPEN, WHAT HAVE YOU DONE?!?\n");

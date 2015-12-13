@@ -3,7 +3,7 @@
 
 #include "config.h"
 
-void mod_round_robin(struct con * con, const char * line);
+void mod_round_robin(struct server * server, const char * line);
 int mod_dispatch(struct irc * event);
 int mod_initialize(struct event_base * evbase);
 void mod_shutdown(void);

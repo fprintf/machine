@@ -31,7 +31,8 @@ struct ircmsg_api {
     char * (*nick)(struct ircmsg * msg);
     char * (*real)(struct ircmsg * msg);
     char * (*host)(struct ircmsg * msg);
-    unsigned long (*cid)(struct ircmsg * msg);
+	char * (*servername)(struct ircmsg * msg); /* Identifies the name of the server this message came from */
+	struct server * (*server)(struct ircmsg * msg); /* Returns the global config object server this message is associated with */
     short (*numeric)(struct ircmsg * msg);
     /* Get parameter at index 'argc' */
     char * (*argv)(struct ircmsg * msg, int argc);
