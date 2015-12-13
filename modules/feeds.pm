@@ -5,8 +5,6 @@ use mod_perl::config;
 use strict;
 use warnings;
 
-#use lib '/home/dead/perl5/lib/perl5';
-#use blib './IRC';
 use XML::LibXML;
 use LWP::UserAgent;
 use HTML::Entities;
