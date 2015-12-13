@@ -133,9 +133,33 @@ sub execperl
     eval {
         local $SIG{ALRM} = sub { die "timed out\n"; };
         alarm 30;
-        $msg = Safe->new->reval($arg);
+		# Redirect stdout/stderr to variables also
+		my $stdout;
+		my $stderr;
+		open(OLDSTDOUT, ">&STDOUT");
+		open(OLDSTDERR, ">&STDERR");
+		close(STDOUT);
+		close(STDERR);
+		open(STDOUT, ">", \$stdout);
+		open(STDERR, ">", \$stderr);
+
+		$stderr =~ s/[\r\n]+(.)/ | $1/g if ($stderr);
+		$stdout =~ s/[\r\n]+(.)/ | $1/g if ($stdout);
+
+		my $safe = Safe->new;
+		$safe->permit(qw(time sort print));
+        $msg = $safe->reval($arg);
+
+		# Restore original stdout/stderr
+		close(STDERR);
+		close(STDOUT);
+		open(STDOUT, ">&OLDSTDOUT");
+		open(STDERR, ">&OLDSTDERR");
+
+		# Return output from whatever source we got it from
+		$msg = $stderr || $stdout || $msg;
     };
-    alarm;
+    alarm 0;
     if ($@) {
         chomp($msg = $@);
     }
