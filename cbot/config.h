@@ -5,11 +5,11 @@
 
 #include <stdbool.h>
 
-#include <vector.h>
+#include <htable.h>
 
 struct server {
     struct con * con; /* Connection object for this server */
-    const char * name; /* Just a name to display for this server */
+    const char * name; /* Name that identifies the server, used to key it in the hash of servers */
     const char * host;
     short int port;
     const char * pass;
@@ -27,7 +27,7 @@ struct server {
 struct config {
     const char * nick;
     const char * real;
-    struct vector * servers;
+    struct htable * servers;
     struct event_base * evbase;
 };
 

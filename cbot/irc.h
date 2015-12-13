@@ -1,13 +1,11 @@
 #ifndef IRC_HEADER__H_
 #define IRC_HEADER__H_
 
-#include "con.h"
-
 /* Interface */
 extern const struct irc_api irc;
 
 struct irc_api {
-    struct irc * (*dispatch)(const char * line, struct con * con);
+    struct irc * (*dispatch)(const char * line);
     void (*free)(struct irc * irc);
 
     /* Get */
@@ -20,8 +18,7 @@ struct irc_api {
     short (*numeric)(struct irc * irc);  /* returns command name of this IRC message */
     int (*israw)(struct irc * irc);  /* Returns true if this command is a numeric and not a string command */
     unsigned long (*cid)(struct irc * irc); /* Returns the connection ID for this server to identify outgoing messages with */
-    const char * (*server)(struct irc * irc); /* Returns the server name used to identify the server in multi-server commands */
-    const char * (*setserver)(struct irc * irc, const char * server); /* Set the server name */
+    char * (*server)(struct irc * irc); /* Returns the server name used to identify the server in multi-server commands */
 
     void (*fdump)(struct irc * irc, FILE * fp); /* debugging, dumps contents to FILE ptr */
 
@@ -33,6 +30,7 @@ struct irc_api {
     /* Actions/Output */
     int (*raw)(struct irc * irc, const char * msg); /* send raw server command */
     int (*privmsg)(struct irc * irc, const char * target, const char * msg); /* PRIVMSG command */
+    int (*privmsg_server)(struct irc * irc, const char * server, const char * target, const char * msg); /* cross-server PRIVMSG command */
     int (*cprivmsg)(struct irc * irc, const char * target, const char * channel, const char * msg); /* CPRIVMSG command (directed, floodproof) */
     int (*notice)(struct irc * irc, const char * target, const char * msg);  /* NOTICE command */
     int (*say)(struct irc * irc, const char * msg);  /* Send PRIVMSG response back to target this came from */

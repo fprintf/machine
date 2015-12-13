@@ -9,6 +9,7 @@
 
 #include "ircmsg.h"
 #include "ircmsg.t"
+#include "config.h"
 
 #define ARRAY_SIZE(x) (sizeof (x) / sizeof *(x))
 
@@ -79,8 +80,15 @@ static struct ircmsg_state * ircm_st_cid(struct ircmsg_state * state)
     state->next = ircm_st_begin;
 
     /* Parse the connection id */
-    if (sscanf(state->line, "S%lu %n", &state->event->cid, &consumed))
+	/* TODO this is a potential bufferoverflow since we dont check the size on servername in sscanf */
+    if (sscanf(state->line, "S%s %n", state->event->servername, &consumed)) {
         state->line += consumed;
+		/* Get the server object for this message from the global config */
+		/* TODO decouple this, ircmsg should be agnostic of the htable.lookup server config */
+		state->event->server = htable.lookup(gconfig.servers, state->event->servername);
+	}
+
+
     return state;
 }
 
@@ -284,7 +292,8 @@ short ircmsg_get_numeric(struct ircmsg * msg) { return msg->numeric; }
 char * ircmsg_get_nick(struct ircmsg * msg) { return msg->pfx->nickname; }
 char * ircmsg_get_real(struct ircmsg * msg) { return msg->pfx->realname; }
 char * ircmsg_get_host(struct ircmsg * msg) { return msg->pfx->host; }
-unsigned long ircmsg_get_cid(struct ircmsg * msg) { return msg->cid; }
+char * ircmsg_get_servername(struct ircmsg * msg) { return msg->servername; }
+struct server * ircmsg_get_server(struct ircmsg * msg) { return msg->server; }
 /* Get parameter at index 'argc' */
 char * ircmsg_get_argv(struct ircmsg * msg, int argc) { if (argc >= msg->argc) return NULL; return msg->argv[argc]; }
 
@@ -300,7 +309,8 @@ const struct ircmsg_api Msg = {
     .real = ircmsg_get_real,
     .host = ircmsg_get_host,
     .text = ircmsg_get_text,
-    .cid = ircmsg_get_cid,
+    .servername = ircmsg_get_servername,
+    .server = ircmsg_get_server,
     .numeric = ircmsg_get_numeric,
 
     /* Get parameter at index 'argc' */

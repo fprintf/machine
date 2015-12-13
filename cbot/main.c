@@ -31,14 +31,16 @@
 #include <event2/event.h>
 #include <event2/bufferevent_struct.h>
 
-#include <irc.h> /* includes con.h also */
+#include <con.h>
+#include <irc.h> 
 #include <mod.h> /* for mod_initialize() which parses our config also */
 #include <log.h>
 
 int readcb(struct con * con, const char * s, void * userdata)
 {
+	struct server * server = userdata;
     /* Allocate new event and process it (in a separate thread .. ) */
-    (void)mod_round_robin(con, s);
+    (void)mod_round_robin(server, s);
 
     return 1;
 }
@@ -64,31 +66,46 @@ void servercb(struct server * server) {
     enum con_flags flags = CF_RECONNECT;
     struct con * con;
 
-	log_debug("[cxn] host: %s port: %d ssl: %d nick: %s user: %s\n",
-			server->host, server->port, server->use_ssl, server->nick, server->user
+	log_debug("[cxn] server-name: %s host: %s port: %d ssl: %d nick: %s user: %s\n",
+			server->name, server->host, server->port, server->use_ssl, server->nick, server->user
 	);
+
+	if (!server->name) {
+		log_debug("[cxn] Failed to add server with no name!");
+		return;
+	}
 
 	if (server->use_ssl)
 		flags |= CF_SSL;
+	/* Set server as callback data */
 	con = Con.new(server->host, server->port, flags, server);
+
 	Con.callbacks(con, readcb, NULL, eventcb);
 	Con.connect(con, gconfig.evbase);
 
-	/* TODO TODO TODO
-	 * NOTE: 'server' here is allocated and we need to free it, but we can't
-	 yet, we need to keep track of it and free it later. The solution is to
-	 add the con pointer into free and add the server item to the list
-	 instead of the con (below) but we need to rewrite some things to make
-	 that possible first, no biggie really but I just have to get around to it
-	 */
+	/* Add the connection to the server, this is crucial */
+	server->con = con;
 
-	vector.push(gconfig.servers, con);
+	htable.store(gconfig.servers, server->name, server);
+}
+
+/*
+   TODO This should be moved into its own module along with the 
+   struct server * handling code should be organized a little
+   better
+ */
+void server_free(const char * key, void * value) {
+	struct server * server = value;
+	if (server) {
+		Con.free(server->con);
+		free(server);
+	}
 }
 
 int main(int argc, char ** argv)
 {
 	/* Initialize our global event base and server list */
-    gconfig.servers = vector.new(0);
+    gconfig.servers = htable.new(1000); // We could have up to a thousand servers 
     gconfig.evbase  = event_base_new();
 
 	/* Load our perl workers */
@@ -107,12 +124,8 @@ int main(int argc, char ** argv)
 	   and is a memory leak (but a static one so not super big deal)
 	 */
     event_base_free(gconfig.evbase);
-	size_t i, max;
-	for (i = 0, max = vector.size(gconfig.servers); i < max; ++i) {
-		struct con * con = vector.index(gconfig.servers, i);
-		Con.free(con);
-	}
-    vector.delete(gconfig.servers);
+
+	htable.free_cb(gconfig.servers, server_free);
 
     mod_shutdown();
 

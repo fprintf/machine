@@ -15,7 +15,11 @@ static const struct ircmsg {
      * PRIVMSG, JOIN, etc..
      */
     enum ircmsg_type type;
-    unsigned long cid;
+
+	/* The name of the server this message came from (for lookup purposes */
+	char servername[BUFSIZ]; 
+	/* The server object from the config that this message came from */
+	struct server * server;
 
     /*
      * Stores server or username

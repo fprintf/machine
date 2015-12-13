@@ -26,6 +26,7 @@
 #include <htable.h>
 #include "xstr.h"
 #include "irc.h"
+#include "con.h"
 #include "config.h"
 #include "log.h"
 
@@ -37,6 +38,9 @@
 /* Worker process configuration */
 #define MAX_WORKERS  4
 #define MAX_REQUESTS 50
+
+/* Server names can not be longer than 1024 letters */
+#define MAX_SERVER_NAME 1024
 
 /* Data used by master to keep track of worker process */
 static const struct worker {
@@ -79,7 +83,7 @@ static void worker_event_callback(struct bufferevent * bev, void * data)
     
     while ((line = evbuffer_readln(input, NULL, EVBUFFER_EOL_CRLF))) {
 //        log_debug("worker[%d] dispatching: %s", getpid(), line);
-        irc.dispatch(line, NULL);
+        irc.dispatch(line);
         free(line);
     }
 }
@@ -160,7 +164,7 @@ static int workers_command_connect(const char * argline)
         Con.callbacks(con, NULL, NULL, NULL);
         Con.connect(con, worker_list->main_evbase);
         /* Add server to vector at index CID */
-        vector.sindex(gconfig.servers, Con.cid(con), con);
+        htable.store(gconfig.servers, "TODO", con);
     }
 
     return 0;
@@ -213,8 +217,8 @@ static void parent_event_callback(struct bufferevent * bev, void * data)
 {
     char * line;
     struct evbuffer * input = bufferevent_get_input(bev);
-    struct con * con;
-    unsigned long cid;
+    struct server * server;
+	char server_name[MAX_SERVER_NAME];
     int consumed;
 
     while ((line = evbuffer_readln(input, NULL, EVBUFFER_EOL_CRLF))) {
@@ -223,19 +227,18 @@ static void parent_event_callback(struct bufferevent * bev, void * data)
             char buf[BUFSIZ];
 
             /* Process commands */
-            log_debug("[debug] parent received command from: %s", line);
+            log_debug("parent received command from: %s", line);
             if (sscanf(line, ":%s %n", buf, &consumed)) 
                 workers_command(data, buf, line + consumed);
         }
         /* else we got message to send to the server, output it */
-        else if (sscanf(line, "S%lu %n", &cid, &consumed)) {
-        //    log_debug("vector: %p cidindex: %p parent read line [%s] to CID: [%lu]", gconfig.servers, vector.index(gconfig.servers, cid), line + consumed, cid);
-            con = vector.index(gconfig.servers, cid);
-            if (con) {
-//                log_debug("parent sending [%s] to CID: [%lu]", line + consumed, cid);
-                Con.puts(con, line + consumed);
+        else if (sscanf(line, "S%s %n", server_name, &consumed)) {
+            server = htable.lookup(gconfig.servers, server_name);
+
+            if (server) {
+                Con.puts(server->con, line + consumed);
             } else {
-                log_debug("Trying to send to invalid server CID: %lu message: %s\n", cid, line + consumed);
+                log_debug("Trying to send to invalid server name: %s message: %s\n", server_name, line + consumed);
             }
         }
 
@@ -505,7 +508,7 @@ int mod_dispatch(struct irc * event)
     return 0;
 }
 
-void mod_round_robin(struct con * con, const char * line)
+void mod_round_robin(struct server * server, const char * line)
 {
     char * data;
     bool try_again;
@@ -516,7 +519,7 @@ void mod_round_robin(struct con * con, const char * line)
         worker_list->current = 
             worker_list->current ? worker_list->current : SLIST_FIRST(worker_list->list);
 
-        xsprintf(&data, "S%d %s\n%zn", Con.cid(con), line, &linesize); 
+        xsprintf(&data, "S%s %s\n%zn", server->name, line, &linesize); 
 //        log_debug("mod_round_robin dispatch: [%s]", data);
         if (send(worker_list->current->sock, data, linesize, 0) == -1) {
             perror("mod_round_robin send");

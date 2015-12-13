@@ -153,7 +153,7 @@ sub talk_help
 {
     my ($irc) = @_;
     $irc->say('.talk [--target|-t target] <message>');
-    $irc->say('--> "target" specifies a target to send the message to');
+    $irc->say('--> "target" specifies a target to send the message to (use servername:target for cross-server communication)');
     $irc->say('--> Hint: Use double quotes around extra spaces or they will be collapsed');
 }
 
@@ -164,8 +164,18 @@ sub talk
     my ($ret, @argv) = handle_arg(\%opt, $irc, \&talk_help, $arg, qw(target|t=s));
     return if (!$ret);
     my $msg = join(' ', @argv);
-    if ($opt{target}) { $irc->privmsg($opt{target}, $msg); } 
-    else { $irc->say($msg); }
+    if ($opt{target}) { 
+		my ($server, $target) = split(/:/, $opt{target});
+
+		# If they passed a server in the target, then use it, otherwise just use the target
+		if ($server && $target) { 
+			$irc->privmsg_server($server, $target, $msg); 
+		} else {
+			$irc->privmsg($server, $msg); 
+		}
+	} else { 
+		$irc->say($msg); 
+	}
 }
 
 sub connect

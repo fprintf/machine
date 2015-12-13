@@ -41,7 +41,7 @@ sub raw_433 {
 
 sub raw_001 {
     my $msg = shift;
-    my @channels = @{$mod_perl::config::conf{servers}->{rizon}->{channels}};
+    my @channels = @{$mod_perl::config::conf{servers}->{$msg->servername()}->{channels}};
     foreach my $chan (@channels) {
 	    $msg->raw("JOIN $chan");
     }

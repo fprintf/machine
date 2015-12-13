@@ -54,6 +54,14 @@ host(event)
     OUTPUT:
         RETVAL
 
+char *
+servername(event)
+    IRC event
+    CODE:
+        RETVAL = irc.server(event);
+    OUTPUT:
+        RETVAL
+
 
 int
 raw(event,text)
@@ -80,6 +88,17 @@ privmsg(event,target,text)
     const char * text
     CODE:
         RETVAL = irc.privmsg(event, target, text);
+    OUTPUT:
+        RETVAL
+
+int
+privmsg_server(event,server,target,text)
+    IRC event
+    const char * server
+    const char * target
+    const char * text
+    CODE:
+        RETVAL = irc.privmsg_server(event, server, target, text);
     OUTPUT:
         RETVAL
 
