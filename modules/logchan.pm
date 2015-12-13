@@ -39,6 +39,8 @@ sub logchan {
 
     my ($source, $dest) = split(/\s/, $arg, 2);
 
+	# TODO need to add removal option and maybe option to list routes
+	# also proably should add an option to list server names/channels the bot is on
 	if (!$source || !$dest) {
 		$irc->say("[error] Please provide a <source> and <destination> in the format server:#channel or #channel for both parameters.");
 		$irc->say("[error] Example: .logchan freenode:#linux #clanz -- Redirect channel #linux on 'freenode' to current server on channel #clanz");
