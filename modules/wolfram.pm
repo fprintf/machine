@@ -61,7 +61,7 @@ sub lookup {
 		}
 		my $result = decode('utf8', $pod->find('subpod//plaintext')->to_literal);
 		# Collapse newlines one line
-		$result =~ s/\r\n?/ | /g;
+		$result =~ s/[^\w \t]+/ /g;
 		$irc->say(encode('utf8', $result));
 	}
 

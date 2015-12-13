@@ -27,7 +27,7 @@ sub connect_useragent
     if (!$UA) {
         $UA = LWP::UserAgent->new(
             'timeout' => 120,
-            'max_redirect' => 7,
+            'max_redirect' => 16,
             'max_size' => 384 * 1024 * 1024,  # 384K
             'agent' => 'Mozilla/5.0 (X11; Linux i686; rv:21.0) Gecko/20100101 Firefox/21.0'
         );
@@ -52,42 +52,44 @@ sub gettitle
 	my ($source) = @_;
 
     my $err = undef;
-    my $content_type; 
     my $title = undef;
 
     my $ua = connect_useragent();
 	my $r = $ua->head($source);
+    my $content_type = 'html'; 
 	if ($r->is_success) {
-        $content_type = $r->header('Content-Type');
-        if ($content_type =~ /html/io) {
-            # We must perform a GET now to get the <title> and <h2> elements
-            $r = $ua->get($source);
-            my $parser = HTML::TreeBuilder->new;
-            my $doc;
-            if ($r->is_success) {
-               $doc = $parser->parse_content($r->decoded_content);
-            } else {
-                $err = $r->status_line;
-            }
-
-            if (!$doc) {
-                print STDERR "linkbot: failed to retrieve webpage: $source $err\n";
-                return ($title, $err);
-            }
-
-            # Get title or first h2 element
-            if ( ($title = $doc->find('title')) ) {
-                $title = $title->as_trimmed_text();
-            } elsif ( ($title = $doc->find('h2')) ) {
-                $title = $title->as_trimmed_text();
-            }
-        } elsif ($content_type =~ /text/io) {
-            my $content = $r->decoded_content;
-            $title = substr($content, 0, $line_limit);
-            $title .= $line_limit < length($content) ? '...' : '';
-        }
+		$content_type = $r->header('Content-Type');
 	} else {
 		$err = $r->status_line;
+	}
+
+	# Assume html if our head request failed
+	if ($content_type =~ /html/io) {
+		# We must perform a GET now to get the <title> and <h2> elements
+		$r = $ua->get($source);
+		my $parser = HTML::TreeBuilder->new;
+		my $doc;
+		if ($r->is_success) {
+			$doc = $parser->parse_content($r->decoded_content);
+		} else {
+			$err = $r->status_line;
+		}
+
+		if (!$doc) {
+			print STDERR "linkbot: failed to retrieve webpage: $source $err\n";
+			return ($title, $err);
+		}
+
+		# Get title or first h2 element
+		if ( ($title = $doc->find('title')) ) {
+			$title = $title->as_trimmed_text();
+		} elsif ( ($title = $doc->find('h2')) ) {
+			$title = $title->as_trimmed_text();
+		}
+	} elsif ($content_type =~ /text/io) {
+		my $content = $r->decoded_content;
+		$title = substr($content, 0, $line_limit);
+		$title .= $line_limit < length($content) ? '...' : '';
 	}
 
     # If we didn't find a title the normal way, just show the content information then
