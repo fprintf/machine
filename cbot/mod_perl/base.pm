@@ -2,6 +2,8 @@ package mod_perl::base;
 use strict;
 use warnings;
 
+use mod_perl::config;
+
 my $cmd_char_pat = qr/^[%\/\.#]/o;
 our %event_registry = ();
 our %command_registry = ();
@@ -66,6 +68,14 @@ sub check_and_run_commands
     return if ($msg->text !~ /$cmd_char_pat(\S+)(?:\s(.+))?$/o);
     my ($cmd,$arg) = ($1,$2);
 
+	# Check for permissions to run the command
+	# If there are no admins, let everyone run the commands
+	my @admins = @{$mod_perl::config::conf{admins} || []};
+	my $nick = $msg->nick;
+	if (@admins && !grep(/\Q$nick\E/, @admins)) {
+		print STDERR "WARNING: $nick tried to run command [$cmd $arg] without permission\n";
+		return;
+	}
     if (exists($command_registry{lc($cmd)})) {
         exec_command($msg,$cmd,$arg);
     }

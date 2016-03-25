@@ -472,9 +472,10 @@ static void con_event_callback(struct bufferevent *bev, short events, void * arg
 
             /* We weren't able to restore the connect, clean up */
             fprintf(stderr, "Connection closed due to error\n");
-            bufferevent_free(con->bev);
-            con->bev = NULL; /* MUST SET TO NULL, TO AVOID DUPLICATE FREE */
-            con->ssl = NULL; /* MUST set to NULL, will be invalid now (see con_free) */
+// We're not freeing because we want to fall through below and reconnect
+//            bufferevent_free(con->bev);
+//            con->bev = NULL; /* MUST SET TO NULL, TO AVOID DUPLICATE FREE */
+//            con->ssl = NULL; /* MUST set to NULL, will be invalid now (see con_free) */
 
 			/* FALL THROUGH TO TRY AND RECONNECT */
 			/* vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv */

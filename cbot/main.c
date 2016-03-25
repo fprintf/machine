@@ -53,6 +53,8 @@ int eventcb(struct con * con, short event, void * userdata)
         case CON_EVENT_CONNECTED:
             Con.printf(con, "USER %s %s * :%s\r\n", server->nick, server->user, "machine-0.666");
             Con.printf(con, "NICK %s\r\n", server->nick);
+			if (server->pass) 
+				Con.printf(con, "PASS %s\r\n", server->pass);
             break;
         case CON_EVENT_EOF:
             fprintf(stderr, "Disconnected...?\n");

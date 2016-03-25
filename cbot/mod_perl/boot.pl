@@ -106,4 +106,9 @@ sub raw_350 {
 	print STDERR $msg->text(), "\n";
 }
 
+sub raw_408 {
+	my $msg = shift;
+	print STDERR $msg->text(), "\n";
+}
+
 1;

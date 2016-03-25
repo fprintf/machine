@@ -197,10 +197,40 @@ sub threatcheck
     return $threat;
 }
 
+# Check against exemptions in the config 
+# nickname exemptions e.g. "nickname" (ignores all lines from nickname)
+# channel exemptions  e.g. "#channel" (ignore all lines from channel #channel)
+# exempt all on a server   (ignore all messages for any channel/nickname on this server)
+# Returns true if there is a matching exemption and false otherwise
+sub linkbot_exemptions {
+	my ($irc) = @_;
+	my $servername = $irc->servername;
+	my $nick = lc($irc->nick);
+	my $channel = lc($irc->target);
+
+	my $conf = $mod_perl::config::conf{servers}{$servername};
+	if ($conf && exists($conf->{linkbot_exemptions})) {
+		my @exemptions = @{$conf->{linkbot_exemptions}};
+		foreach my $ex (@exemptions) {
+			$ex = lc($ex);
+			if ($ex eq $nick || $ex eq $channel) {
+				return 1;
+			}
+		}
+	}
+
+	return undef;
+}
+
 sub run
 {
     my $irc = shift;
     my $text = $irc->text;
+
+	# Check if we should ignore this line due to an exemption
+	if (linkbot_exemptions($irc)) {
+		return;
+	}
 
     # If not a url, ignore 
     while ($text =~ /((\S+):\/\/\S+)/og) {

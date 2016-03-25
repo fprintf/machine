@@ -228,6 +228,7 @@ static struct server * mod_perl_conf_server(HV * hash, const char * name) {
 
 	server->nick = hash_getstr(hash, "nick");
 	server->user = hash_getstr(hash, "user");
+	server->pass = hash_getstr(hash, "pass");
 
 	return server;
 }
@@ -237,7 +238,6 @@ static struct server * mod_perl_conf_server(HV * hash, const char * name) {
  */
 void mod_perl_conf_servers(void (*cb)(struct server *)) {
 	const char * evalstr = "$" MOD_PERL_CONF_NAME "{servers}";
-	//log_debug("running perl [%s]\n", evalstr);
 	SV * ref = eval_pv(evalstr, 1);
 
 	if (!ref || !SvROK(ref)) {
