@@ -4,7 +4,7 @@ use strict;
 use warnings;
 
 my %conf;
-my @config_search_list = ('/etc', '~/.cbot', '~/');
+my @config_search_list = ('/etc', "$ENV{HOME}/.cbot", "$ENV{HOME}");
 
 
 BEGIN: {

@@ -91,6 +91,9 @@ sub feeds_load
 {
     my ($path) = @_;
 
+	$path =~ s/~/$ENV{HOME}/;
+	$path =~ s/\$HOME/$ENV{HOME}/;
+
     my $FEEDS = do $path;
     if ($@) {
         chomp($@);
