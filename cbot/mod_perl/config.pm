@@ -2,10 +2,13 @@ package mod_perl::config;
 
 use strict;
 use warnings;
+use File::Basename;
 
 my %conf;
-my @config_search_list = ('/etc', "$ENV{HOME}/.cbot", "$ENV{HOME}");
-
+my @config_search_list = ("$ENV{HOME}/.cbot", "$ENV{HOME}", "/etc");
+my $conf_dir;
+my $module_db;    # Path to the shared sqlite3 database that modules can create tables in
+my @module_dirs;  # List of paths where modules should be loaded from (in sequence)
 
 BEGIN: {
 	load_config();
@@ -31,6 +34,14 @@ sub load_config
 	if (!$path) {
 		die "Unable to locate config file in ".join(", ", @config_search_list)."\n";
 	}
+
+	# Set up our globals now
+	$conf_dir = basename($path);
+	$module_db = join("/", $conf_dir, "module_data.sqlite3");
+	@module_dirs = (
+		join("/", $conf_dir, "modules"), 
+		"/etc/cbot/modules" 
+	);
 
 	do $path;
 }

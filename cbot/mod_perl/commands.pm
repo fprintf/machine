@@ -10,32 +10,35 @@ use mod_perl::config;
 use Getopt::Long qw(:config no_ignore_case);
 use Safe;
 
-load_modules($mod_perl::config::conf{module_path} || 'mod_perl/modules/');
+
+# MAIN
+load_modules();
+
+# END MAIN
 
 sub load_modules {
-    my ($module_path) = @_;
-    if (! -e $module_path) {
-        print STDERR "Module directory doesn't exist: $module_path\n";
-        return;
-    }
+	foreach my $module_path (@mod_perl::config::module_dirs) {
+		if (! -e $module_path) {
+			print STDERR "Module directory doesn't exist: $module_path\n";
+			next;
+		}
 
-    my $dh;
-    if (!opendir($dh, $module_path)) {
-        print STDERR "Failed to read $module_path: $!\n";
-        return;
-    }
+		my $dh;
+		if (!opendir($dh, $module_path)) {
+			print STDERR "Failed to read $module_path: $!\n";
+			next;
+		}
 
-    while (my $module = readdir($dh)) {
-        next if ($module =~ /^\.*$/);
-        $module =~ s/\.pm$//;
-        eval "use mod_perl::modules::$module";
-        if ($@) {
-            print STDERR "Failed to load module: $module: $@";
-            next;
-        }
-    }
-
-    # Done loading modules..
+		while (my $module = readdir($dh)) {
+			next if ($module =~ /^\.*$/);
+			$module =~ s/\.pm$//;
+			eval "use mod_perl::modules::$module";
+			if ($@) {
+				print STDERR "Failed to load module: $module: $@";
+				next;
+			}
+		}
+	}
 }
 
 

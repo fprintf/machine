@@ -5,15 +5,11 @@ use mod_perl::config;
 use strict;
 use warnings;
 
-use XML::LibXML;
-use LWP::UserAgent;
-use HTML::Entities;
-use Cache::FastMmap;
-
 use mod_perl::modules::utils;
 
-my $XML_PARSER;
-my %feeds;
+use XML::Feed;
+use DBI;      # replacing Cache::FastMap with sqlite3 database, also replaces the config file to be a database entry
+use Cache::FastMmap;
 
 # Init our inter-process shared cache which we use
 # to store the results from the last query (if its the same feed)
@@ -27,6 +23,7 @@ my $cache = Cache::FastMmap->new(
 	init_file => 0,
 	unlink_on_exit => 1
 );
+my %feeds;
 
 # Register our run command
 mod_perl::commands::register_command('feeds', \&run);
@@ -40,22 +37,10 @@ sub feeds_help
     return;
 }
 
-sub feeds_getXMLdoc
+sub feeds_getfeed
 {
 	my ($irc, $source) = @_;
-	if (!$XML_PARSER) {
-		$XML_PARSER = XML::LibXML->new;
-	}
-	my $ua = LWP::UserAgent->new;
-	my $r = $ua->get($source);
-
-	my $doc = undef;
-	if ($r->is_success) {
-		$doc = $XML_PARSER->load_xml(string => $r->decoded_content);
-	} else {
-		$irc->say("[error] Couldn't retrieve '$source': ".$r->status_line);
-	}
-
+	my $doc = XML::Feed->parse(URI->new($source));
 	return $doc;
 }
 
@@ -64,7 +49,7 @@ sub feeds_add
 	my ($irc, $name, $title, $source) = @_;
 	return 0 if (!$name || !$title || !$source);
 
-	my $doc = feeds_getXMLdoc($irc, $source);
+	my $doc = feeds_getfeed($irc, $source);
 	return 0 if !$doc;
 
 	$feeds{$name} = { title => $title, source => $source };
@@ -120,19 +105,17 @@ sub feeds_lookup
 	# Handle paging requests (repeated lookup for same feed, shows more results, no further lookups)
 	my @items = ();
 	my $lookup_call = sub {
-		my $doc = feeds_getXMLdoc($irc, $feeds{$feed}->{source});
-		return if !$doc;
-		@items = $doc->getElementsByTagName('item');
-		if (!@items) {
-			$irc->say("[error] Malformed XML received, can't continue");
+		my $doc = feeds_getfeed($irc, $feeds{$feed}->{source});
+		if (!$doc) {
+			print STDERR "Failed to get feed: $feed: ".$XML::Feed->errstr."\n";
 			return;
 		}
-		@items = map {
-			my $title = decode_entities($_->find('title'));
-			my $link  = decode_entities($_->find('link'));
-			$link = mod_perl::modules::utils::tinyurl($link);
-			"* $title ::  $link";
-		} @items;
+
+		foreach my $entry ($doc->entries) {
+			my $title = $entry->title();
+			my $link = mod_perl::modules::utils::tinyurl($entry->link());
+			push(@items, sprintf("* %s :: %s", $title, $link));
+		}
 	};
 
 	if ($last->{feed} eq $feed) {
