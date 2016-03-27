@@ -17,7 +17,10 @@ load_modules();
 # END MAIN
 
 sub load_modules {
+	print "Loading modules\n";
+	push(@mod_perl::config::module_dirs, $mod_perl::config::conf{module_path});
 	foreach my $module_path (@mod_perl::config::module_dirs) {
+		print "Searching for modules in $module_path\n";
 		if (! -e $module_path) {
 			print STDERR "Module directory doesn't exist: $module_path\n";
 			next;
@@ -37,6 +40,7 @@ sub load_modules {
 				print STDERR "Failed to load module: $module: $@";
 				next;
 			}
+			print "Loaded module: $module\n";
 		}
 	}
 }
