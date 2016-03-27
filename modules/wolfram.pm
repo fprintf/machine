@@ -8,7 +8,7 @@ use warnings;
 use LWP::UserAgent;
 use XML::LibXML;
 use URI::Escape;
-use Encode qw(decode encode);
+use Encode qw(encode_utf8);
 use HTML::Entities;
 
 my $wolfram_api = $mod_perl::config::conf{wolfram_api_url} || 
@@ -55,14 +55,18 @@ sub lookup {
 	return if (!$doc);
 
 	my @pods = $doc->findnodes('//pod[@primary="true"]');
+	unshift(@pods, $doc->findnodes('//pod[@title="Input"]'));
+	unshift(@pods, $doc->findnodes('//pod[@title="Input interpretation"]'));
 	foreach my $pod (@pods) {
+		my $message;
 		if ($pod->getAttribute('title')) { 
-			$irc->say("[wolfram] ". $pod->getAttribute('title'));
+			$message = "[WA] ". $pod->getAttribute('title');
 		}
-		my $result = decode('utf8', $pod->find('subpod//plaintext')->to_literal);
+		my $result = $pod->find('subpod//plaintext')->to_literal;
 		# Collapse newlines one line
-		$result =~ s/[^\w \t[:punct:]]+/ /g;
-		$irc->say(encode('utf8', $result));
+		$result =~ s/\n+/    /g;
+		$message .= ' || '. $result;
+		$irc->say($message);
 	}
 
 	if (!@pods) {
