@@ -27,10 +27,6 @@ a specified default value (usually 25) it will just be returned unshortened.
 
 The URL to shorten
 
-=item B<$site>
-
-Full URL with query e.g: http://is.gd/create.php?format=simple&url=
-
 =back
 
 =cut
@@ -61,6 +57,43 @@ sub tinyurl {
 	}
 
     return $tinyurl;
+}
+
+=pod
+
+=head2 upload_content
+
+This function takes the given content and uploads it to a
+pastebin site (it must be text only content). It then
+returns the url it got from uploading the text.
+
+If multiple values are passed they are concatenated together and uploaded as one string.
+
+=over 12
+
+=item B<content>
+
+The content to upload, stored as string.
+
+=back
+
+=cut
+
+sub upload_content {
+	my $content = shift;
+	my $host = 'http://sprunge.us';
+	my $ua = LWP::UserAgent->new;
+
+	my $res = $ua->post($host, 'Content-Type' => 'form-data', 'Content' => [ sprunge => $content ]);
+	my $url;
+	if ($res->is_success()) {
+		chomp($url = $res->decoded_content());
+	} else {
+		print STDERR "Failed to post [$content]: ".$res->status_line."\n";
+		return undef;
+	}
+		
+	return $url;
 }
 
 1;
