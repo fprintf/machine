@@ -5,10 +5,12 @@ use mod_perl::modules::utils;
 
 use LWP::UserAgent;
 use JSON::XS;
-use Data::Dumper;
+use Date::Format;
+use Date::Parse;
 
 my $pollster_api_base_url = 'http://elections.huffingtonpost.com/pollster/api';
 my $output_limit = 350;
+my $date_format = '%Y-%m-%d %H:%M:%S %z';
 
 #####################################
 # (INIT) Run when the module is first included
@@ -20,6 +22,31 @@ mod_perl::commands::register_command('poll', \&run);
 #####################################
 # Functions
 #####################################
+sub pretty_time {
+	my ($timestr) = @_;
+
+	my $time = str2time($timestr);
+	my $elapsed = time - $time;
+
+	my $pretty = $timestr;
+	if ($elapsed < 120) {
+		$pretty = 'less than a minute ago';
+	} elsif($elapsed <= 3600 * 2) {
+		$pretty = 'less than an hour ago';
+	} elsif ($elapsed <= 3600 * 8) {
+		$pretty = 'several hours ago';
+	} elsif ($elapsed <= 86400) {
+		$pretty = 'today';
+	} elsif ($elapsed <= 86400 * 2) {
+		$pretty = 'yesterday';
+	} else {
+		$pretty = time2str($date_format, $time);
+	}
+	
+	return $pretty;
+}
+
+
 sub api_call {
 	my ($query, %opt) = @_;
 	my $call = sprintf("%s/%s", $pollster_api_base_url, $query);
@@ -35,30 +62,9 @@ sub api_call {
 		die $res->status_line;
 	}
 
+#use Data::Dumper;
 #	print STDERR Dumper($json), "\n";
 	return $json;
-}
-
-sub extract_ratings {
-	my ($json, %choices) = @_;
-
-	if (ref($json) ne 'ARRAY') {
-		die "Unknown ratings format: $json";
-	}
-
-	my $results = {};
-	foreach my $poll (@$json) {
-	foreach my $question (@{$poll->{questions}}) {
-		print "$question->{name}\n";
-	foreach my $subpop (@{$question->{subpopulations}}) {
-		print "$subpop->{name}\n";
-	foreach my $response (@{$subpop->{responses}}) {
-		my $choice = lc($response->{choice});
-		next if (!exists($choices{$choice}));
-		$results->{$choice}{value} += $response->{value};
-	}}}}
-
-	return $results;
 }
 
 sub list_objects {
@@ -97,7 +103,7 @@ sub list_objects {
 sub chart {
 	my ($slug) = @_;
 	# These are IRC colors (will be used sequentially)
-	my @colors = (2, 3, 4, 5, 7, 9, 8);
+	my @colors = (8, 11, 3, 12, 4, 13, 2);
 	# Display width of the chart 
 	my $display_width = 40;
 
@@ -115,14 +121,16 @@ sub chart {
 
 
 	my @chart_lines;
-	push(@chart_lines, sprintf("(%d) %s [%s]", $json->{poll_count}, $json->{short_title} || $json->{title}, $json->{last_updated}));
+	my $timestamp = pretty_time($json->{last_updated});
+	push(@chart_lines, sprintf("(%d) %s [%s]", $json->{poll_count}, $json->{short_title} || $json->{title}, $timestamp));
 	my $i = 0;
 	foreach my $estimate (sort { $b->{lead_confidence} <=> $a->{lead_confidence} } @estimates) {
 		my $width = int($estimate->{value} / 2.5 + 0.5);
+		my $color = $colors[$i++ % scalar(@colors)];
 
 		push(@chart_lines, 
-			sprintf(" %-15.15s \003%d|%-$display_width.${display_width}s\003 (%4.1f%%)",
-				$estimate->{choice}, $colors[$i++ % scalar(@colors)], '#' x $width, $estimate->{value}
+			sprintf(" %-15.15s\003 |\003%02d,%02d%-$display_width.${display_width}s (%4.1f%%)",
+				$estimate->{choice}, $color, $color, ' ' x $width . "\003", $estimate->{value}
 			)
 		);
 	}

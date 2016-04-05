@@ -1,7 +1,6 @@
 package mod_perl::modules::stock;
 use mod_perl::commands;
 
-use lib '/home/dead/perl5/lib/perl5/';
 use JSON::XS;
 use LWP::UserAgent;
 use URI::Escape;
@@ -35,10 +34,6 @@ sub yql_query
 	my $json = undef;
 	if ($r->is_success) {
 		my $content = $r->decoded_content;
-		# This is required to be stripped off of the Symbol lookup returned data
-		# for some reason it's returned as an argument to a function call.. :/
-		$content =~ s/^YAHOO.Finance.SymbolSuggest.ssCallback\(//;
-		$content =~ s/\)$//;
 		$json = decode_json $content;
 	} else {
 		$msg->say("[error] Couldn't retrieve '$source': ".$r->status_line);
@@ -51,7 +46,7 @@ sub symbol_lookup
 {
 	my ($msg, @search) = @_;
 	my $api_query = uri_escape(join(" ",@search));
-	my $api_params = "&callback=YAHOO.Finance.SymbolSuggest.ssCallback";
+	my $api_params = "&region=US&lang=en";
 
 	my $json = yql_query($msg,join('',$symbol_api_base,$api_query,$api_params));
 	return if !$json;
