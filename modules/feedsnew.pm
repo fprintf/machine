@@ -7,7 +7,7 @@ use warnings;
 use mod_perl::modules::utils;
 
 # Holds access to our feeds database within this process
-my $feeds = Feeds->new(path => $mod_perl::config::module_db);
+my $Feeds = Feeds->new(path => $mod_perl::config::module_db);
 mod_perl::commands::register_command('feedsnew', \&run);
 
 
@@ -27,7 +27,7 @@ sub feeds_add {
 	my ($irc, $name, $source) = @_;
 
 	eval {
-		$feeds->add($name, $source);
+		$Feeds->add(name => $name, url => $source);
 	};
 	if ($@) { 
 		chomp($@); 
@@ -53,13 +53,13 @@ sub feeds_search {
 	}
 
 	my @results;
-	foreach my $feed ($feeds->list) {
-		# We're only looking for feeds matching pattern '$feeds' (or all feeds if no pattern given)
-		next if ($feeds && $feed !~ $feeds);
+	foreach my $feed ($Feeds->entries) {
+		# We're only looking for feeds matching pattern '$limit' (or all feeds if no pattern given)
+		next if ($limit && $feed->name =~ $limit);
 
 		foreach my $entry ($feed->update()->entries()) {
 			if ($entry->title =~ $query) {
-				push(@results, sprintf("[%s] %s :: %s", $feed->title(), $entry->title, $entry->link));
+				push(@results, sprintf("[%s] %s :: %s", $feed->title(), $entry->title, mod_perl::modules::utils::tinyurl($entry->link)));
 			}
 		}
 	}
@@ -80,7 +80,7 @@ sub feeds_lookup {
 	my ($irc, $name) = @_;
 
 	# Handle paging requests (repeated lookup for same feed, shows more results, no further lookups)
-	my $feed = eval { $feeds->get_latest($name) };
+	my $feed = eval { $Feeds->get_latest($name) };
 	if ($@) {
 		$irc->say($@);
 		return;
@@ -107,10 +107,10 @@ sub run {
     return if (!$ret);
 
 	# Make sure we're up to date on each run, this only does something if the file changed
-	$feeds->update();
+	$Feeds->update();
 
 	if ($opt{list}) {
-		$irc->say("Sources: ".join(", ", $feeds->list));
+		$irc->say("Sources: ".join(", ", $Feeds->list));
 		return;
 	}
 
@@ -224,6 +224,12 @@ sub get_latest {
 sub list {
 	my $self = shift;
 	return sort keys %{$self->{feeds}};
+}
+
+# Return an array of the feed objects themselves
+sub entries {
+	my $self = shift;
+	return values %{$self->{feeds}};
 }
 
 # Add a feed to the database

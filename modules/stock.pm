@@ -86,12 +86,51 @@ sub run
 		return;
 	}
 
+	my $func = sub {
+		my ($value, $diff, $comparediff) = @_;
+		my @colors = (
+			{ ratio => .85, color => 9 }, # .85 or higher
+			{ ratio => .70, color => 11 },
+			{ ratio => .40, color => 0 }, # neutral (about the average)
+			{ ratio => .25, color => 8 },
+			{ ratio => .15, color => 4 }, # .25 - .15  (and also any less than this, will use this color also)
+		);
+
+		my $chosen = $colors[$#colors]->{color}; # default to the last possible color (worst)
+		foreach my $color (@colors) {
+			if ($diff >= $color->{ratio} * $comparediff) {
+				$chosen = $color->{color};
+				last;
+			}
+		}
+
+		return $chosen;
+	};
+
 	# Display the results
-	my $hfmt = "%-6s %7s %-6s %10s %-10s %15s";
-	my $fmt = "%-6s %7.2f %-+6.2f %10.2f %-10.2f %15s";
-	$msg->say(sprintf($hfmt, "symbol", "price", "change", "ylow", "yhigh", "drange"));
+	my $fmt = "\003%02d%-6s \003%02d%7.2f \003%02d%-+6.2f\003 Year[%.2f - %.2f] %s";
 	foreach my $s (@data) {
-		$msg->say(sprintf($fmt, "$s->{symbol}",$s->{LastTradePriceOnly},$s->{Change},$s->{YearLow},$s->{YearHigh},$s->{DaysRange}));
+		my $price = $s->{AskRealtime} || $s->{Ask} || $s->{LastTradePriceOnly};
+		next if (!$price);
+
+		my $change_color = $s->{Change} > 0.0 ? 9 : 4;
+		my $symbol_color = 14;
+		my $price_color = $func->($price, $price - $s->{YearLow}, $s->{YearHigh} - $s->{YearLow});
+		my (@day_range) = $s->{DaysRange} =~ /([\d\.]+)/g;
+		my $day_lowcolor = $func->($day_range[0], $day_range[0] - $s->{YearLow}, $s->{YearHigh} - $s->{YearLow});
+		my $day_highcolor = $func->($day_range[1], $day_range[1] - $s->{YearLow}, $s->{YearHigh} - $s->{YearLow});
+		$msg->say(sprintf($fmt, 
+				$symbol_color,
+				uc($s->{symbol}), 
+				$price_color,
+				$price,
+				$change_color,
+				$s->{Change},
+				$s->{YearLow},
+				$s->{YearHigh},
+				$s->{DaysRange} ? sprintf("Day[\003%02d%.2f\003 - \003%02d%.2f\003]", $day_lowcolor, $day_range[0], $day_highcolor, $day_range[1]) : ''
+			)
+		);
 	}
 }
 
