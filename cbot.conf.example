@@ -1,0 +1,30 @@
+#
+# Example Config file.
+# Put this in ~/.cbot/cbot.conf or /etc/cbot.conf
+
+%conf = (
+    module_path => 'mod_perl/modules',
+    nickname => 'piggy_on_patrol',
+    servers => {
+		'rizon' => {
+			host => 'irc.rizon.net',
+			port => 6697,
+			ssl  => 1,
+			nick => 'piggy_on_patrol',
+            user => '0',
+			pass => '',
+			channels => [qw(#chat)],
+			# Linkbot will ignore messages in these channels/from these nicknames
+			linkbot_exemptions => [
+			],
+		},
+		# Enter additional servers as above..
+    },
+	# Enter the nicknames of people who can 
+	# use the bot (this is likely to change when user registration is possible)
+	admins => ['rottencrotch', 'misterman'];
+
+	# Wolfram API key, in order for the wolfram alpha module to work
+	# you need to get a wolfram API key here
+	wolfram_api_key => ''
+);
