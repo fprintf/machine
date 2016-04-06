@@ -118,10 +118,16 @@ static void parent_sig_callback(evutil_socket_t sig, short what, void * data)
 			workers_command_reload(NULL);
             break;
         case SIGCHLD:
-            child = waitpid(0, &status, 0);
-            log_debug("parent [%d] caught SIGCHLD for pid [%d]", getpid(), child);
-            list->reapme = child;
-            event_base_once(list->main_evbase, -1, EV_TIMEOUT, workers_spawn_callback, list, NULL);
+			/* Multiple children may have exited, so we need to keep waiting until we don't get any more children */
+			for (;;) {
+				child = waitpid(0, &status, WNOHANG);
+				if (child <= 0) 
+					break;
+
+				log_debug("parent [%d] caught SIGCHLD for pid [%d]", getpid(), child);
+				list->reapme = child;
+				event_base_once(list->main_evbase, -1, EV_TIMEOUT, workers_spawn_callback, list, NULL);
+			}
             break;
         default:
             break;
@@ -135,6 +141,7 @@ static void worker_sig_callback(evutil_socket_t sig, short what, void * data)
     struct worker_ctx * ctx = data;
 
     switch (sig) {
+		case SIGINT:
         case SIGHUP:
             log_debug("child [%d] caught SIGINT exiting...", getpid());
             event_base_loopexit(ctx->base, NULL);
@@ -163,8 +170,8 @@ static int workers_command_connect(const char * argline)
         /* TODO need to set read and event callback to same as we set main connection */
         Con.callbacks(con, NULL, NULL, NULL);
         Con.connect(con, worker_list->main_evbase);
-        /* Add server to vector at index CID */
-        htable.store(gconfig.servers, "TODO", con);
+        /* Add server to hash table */
+        htable.store(gconfig.servers, host, con);
     }
 
     return 0;

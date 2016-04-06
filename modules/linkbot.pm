@@ -27,7 +27,7 @@ sub connect_useragent
     if (!$UA) {
         $UA = LWP::UserAgent->new(
             'timeout' => 120,
-            'max_redirect' => 16,
+            'max_redirect' => 8,
             'max_size' => 384 * 1024 * 1024,  # 384K
             'agent' => 'Mozilla/5.0 (X11; Linux i686; rv:21.0) Gecko/20100101 Firefox/21.0'
         );
@@ -87,9 +87,12 @@ sub gettitle
 			$title = $title->as_trimmed_text();
 		}
 	} elsif ($content_type =~ /text/io) {
-		my $content = $r->decoded_content;
-		$title = substr($content, 0, $line_limit);
-		$title .= $line_limit < length($content) ? '...' : '';
+		$title = $r->decoded_content;
+	}
+
+	if ($title) {
+		$title = substr($title, 0, $line_limit);
+		$title .= $line_limit < length($title) ? '...' : '';
 	}
 
     # If we didn't find a title the normal way, just show the content information then
@@ -233,7 +236,7 @@ sub run
 	}
 
     # If not a url, ignore 
-    while ($text =~ /((\S+):\/\/\S+)/og) {
+    while ($text =~ /((\S+):\/\/\S+\/?)/og) {
         my ($uri,$proto) = ($1, lc($2));
 #        print STDERR "linkbot got proto: $proto uri: $uri\n";
         if (!exists($accepted_protocols{$proto})) {

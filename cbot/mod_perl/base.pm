@@ -45,7 +45,7 @@ sub check_and_run_events
 
 #
 # Run commands from authorized users
-# (currently no authorization unfortunately)
+# (currently only nickbased auth unfortunately)
 #
 
 sub command_register
@@ -58,6 +58,16 @@ sub command_register
     }
 
     $command_registry{$cmd} = $code;
+}
+
+# Clears the command register
+sub clear_register {
+	%command_registry = ();
+}
+
+# Clears the event register
+sub clear_event_register {
+	%event_registry = ();
 }
 
 sub check_and_run_commands
