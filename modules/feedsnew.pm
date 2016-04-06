@@ -1,4 +1,4 @@
-package mod_perl::modules::feedsnew;
+package mod_perl::modules::feeds;
 
 use mod_perl::config;
 use strict;
@@ -8,7 +8,7 @@ use mod_perl::modules::utils;
 
 # Holds access to our feeds database within this process
 my $Feeds = Feeds->new(path => $mod_perl::config::module_db);
-mod_perl::commands::register_command('feedsnew', \&run);
+mod_perl::commands::register_command('feeds', \&run);
 
 
 sub feeds_help {
