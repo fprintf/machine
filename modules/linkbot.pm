@@ -9,30 +9,29 @@ use warnings;
 
 use mod_perl::modules::utils;
 
+my $line_limit = 256; # Maximum characters to output for untitled text-like pages
 my %accepted_protocols = (
     'http' => 1, 
     'https' => 1,
 );
 
-my $XML_PARSER = undef;
-my $UA = undef;
-
-my $line_limit = 256; # Maximum characters to output for untitled text-like pages
+# Create our exemption and threat checking functions
+my $is_exempt = make_exempt_checker();
+my $threat_check = make_threat_checker();
 
 # Linkbot
 mod_perl::base::event_register('PRIVMSG', \&run);
 
-sub connect_useragent
+sub get_user_agent
 {
-    if (!$UA) {
-        $UA = LWP::UserAgent->new(
-            'timeout' => 120,
-            'max_redirect' => 8,
-            'max_size' => 384 * 1024 * 1024,  # 384K
-            'agent' => 'Mozilla/5.0 (X11; Linux i686; rv:21.0) Gecko/20100101 Firefox/21.0'
-        );
-    }
-    return $UA;
+	my $ua = LWP::UserAgent->new(
+		'timeout' => 120,
+		'max_redirect' => 8,
+		'max_size' => 384 * 1024 * 1024,  # 384K
+		'agent' => 'Mozilla/5.0 (X11; Linux i686; rv:21.0) Gecko/20100101 Firefox/21.0'
+	);
+
+    return $ua;
 }
 
 sub humanBytes {
@@ -47,14 +46,14 @@ sub humanBytes {
     return "$bytes$units[$unit_measure]";
 }
 
-sub gettitle
+sub get_title
 {
 	my ($source) = @_;
 
     my $err = undef;
     my $title = undef;
 
-    my $ua = connect_useragent();
+    my $ua = get_user_agent();
 	my $r = $ua->head($source);
     my $content_type = 'html'; 
 	if ($r->is_success) {
@@ -108,121 +107,89 @@ sub gettitle
 	return ($title, $err);
 }
 
-sub threatcheck
-{
-    my ($uri) = @_;
-    my $threat_check = 1; # Set to 1 if check for threats (can be slow..)
+sub make_threat_checker {
     my $api = {
         key => '298aa0a47a9c4703103f0c9b2d7c0e8394485613',
         uri => 'http://api.urlvoid.com/api1000'
     };
-    # Extract only the hostname portion of the url
-    (my $host = $uri) =~ s/^\S+:\/\/(?:www)?\.?//;
-    $host =~ s/\/.*$//;
+	my $ua = get_user_agent();
+	my $parser = XML::LibXML->new;
+	return sub {
+		my ($uri) = @_;
+		(my $host = $uri) =~ s/^\S+:\/\/(?:www)?\.?//;
+		$host =~ s/\/.*$//;
+		my $threat = $host;
 
-    my $threat = $host;
-    # IF we were told not to check threats, stop here
-    return $threat if (!$threat_check);
+		my $query = sprintf("%s/%s/host/%s/", $api->{uri}, $api->{key}, $host);
+		#print STDERR "threatcheck query: $query\n";
+		my $req = $ua->get($query);
+		if (!$req->is_success()) {
+			print STDERR "threatcheck: [$query] failed to retrieve: ".$req->status_line."\n";
+			return $threat;
+		}
 
-    my $ua = connect_useragent();
-    my $query = sprintf("%s/%s/host/%s/", $api->{uri}, $api->{key}, $host);
-    #print STDERR "threatcheck query: $query\n";
+		my $doc = $parser->load_xml(string => $req->content());
+		if (!$doc) {
+			print STDERR "threatcheck: parse failure: $!\n";
+			return $threat;
+		}
 
-    my $req = $ua->get($query);
-    if ($req->is_success()) {
-        if (!$XML_PARSER) {
-            $XML_PARSER = XML::LibXML->new;
-        }
+		# Decide threat of a site based on alexa rank and google rank
+		# and if there are redirects and if the domain age 
+		my $grank = "".$doc->getElementsByTagName('google_page_rank')->to_literal;
+		my $alexa = "".$doc->getElementsByTagName('alexa_rank')->to_literal;
+		my $domain_age = "".$doc->getElementsByTagName('domain_age')->to_literal;
 
-        my $doc = $XML_PARSER->load_xml(string => $req->decoded_content());
-        if (!$doc) {
-            print STDERR "threatcheck: parse failure: $!\n";
-            return $threat;
-        }
-        # Parse xml..
+		my $rank = $grank + $alexa;
+		my $good_threshold = 1000;
+		my $bad_threshold = 5000;           
+		my $age_limit = 3 * 365*24*3600; # 3 years
 
-#<response>
-#<details>
-# <host>ibtimes.co.uk</host>
-# <updated>1420571546</updated>
-# <http_response_code>200</http_response_code>
-# <domain_age>1141794000</domain_age>
-# <google_page_rank>7</google_page_rank>
-# <alexa_rank>0</alexa_rank>
-# <connect_time>0.151433</connect_time>
-# <header_size>510</header_size>
-# <download_size>109061</download_size>
-# <speed_download>208234</speed_download>
-# <external_url_redirect></external_url_redirect>
-# <ip>
-#<addr>64.147.114.55</addr>
-#<hostname>64.147.114.55.static.nyinternet.net</hostname>
-#<asn>11403</asn>
-#<asname>The New York Internet Company</asname>
-#<country_code>US</country_code>
-#<country_name>United States</country_name>
-#<region_name>New York</region_name>
-#<city_name>New York</city_name>
-#<continent_code>NA</continent_code>
-#<continent_name>North America</continent_name>
-#<latitude>40.7089</latitude>
-#<longitude>-74.0012</longitude>
-# </ip>
-#</details>
-#<page_load>0.00</page_load>
-#</response>
-#
-        # Decide threat of a site based on alexa rank and google rank
-        # and if there are redirects and if the domain age 
-        my $grank = "".$doc->getElementsByTagName('google_page_rank')->to_literal;
-        my $alexa = "".$doc->getElementsByTagName('alexa_rank')->to_literal;
-        my $domain_age = "".$doc->getElementsByTagName('domain_age')->to_literal;
+		if (($rank >= $bad_threshold || $rank < 1.0) && $domain_age < $age_limit) {
+			$threat = "\00304$host\003"; # Bad site
+		} elsif ($rank >= 1.0 && $rank <= $good_threshold) {
+			$threat = "\00309$host\003"; # Good site
+		} else {
+			$threat = "\00307$host\003"; # Warning, unknown, but older than 3 years
+		}
 
-        my $rank = $grank + $alexa;
-        my $good_threshold = 1000;
-        my $bad_threshold = 5000;           
-        my $age_limit = 3 * 365*24*3600; # 3 years
+		# Only append rank if its actualy above 0.0
+		if ($rank > 0.0) {
+			$threat .= ' rank:'.$rank;
+		}
 
-        if (($rank >= $bad_threshold || $rank < 1.0) && $domain_age < $age_limit) {
-            $threat = "\00304$host\003"; # Bad site
-        } elsif ($rank >= 1.0 && $rank <= $good_threshold) {
-            $threat = "\00309$host\003"; # Good site
-        } else {
-            $threat = "\00307$host\003"; # Warning, unknown, but older than 3 years
-        }
-
-        $threat .= ' rank:'.$rank;
-
-    } else {
-        print STDERR "Failed to retrieve threat information: ".$req->status_line."\n";
-    }
-
-    return $threat;
+		return $threat;
+	};
 }
 
-# Check against exemptions in the config 
-# nickname exemptions e.g. "nickname" (ignores all lines from nickname)
-# channel exemptions  e.g. "#channel" (ignore all lines from channel #channel)
-# exempt all on a server   (ignore all messages for any channel/nickname on this server)
-# Returns true if there is a matching exemption and false otherwise
-sub linkbot_exemptions {
-	my ($irc) = @_;
-	my $servername = $irc->servername;
-	my $nick = lc($irc->nick);
-	my $channel = lc($irc->target);
-
-	my $conf = $mod_perl::config::conf{servers}{$servername};
-	if ($conf && exists($conf->{linkbot_exemptions})) {
-		my @exemptions = @{$conf->{linkbot_exemptions}};
-		foreach my $ex (@exemptions) {
-			$ex = lc($ex);
-			if ($ex eq $nick || $ex eq $channel) {
-				return 1;
-			}
+sub make_exempt_checker {
+	# Map the exemptions in the config into a more suitable format
+	# for quick lookup purposes
+	my %exemptions;
+	while (my ($name, $val) = each %{$mod_perl::config::conf{servers}}) {
+		my @tmp = @{$val->{linkbot_exemptions}};
+		if (@tmp) {
+			$exemptions{$name} = map { $_ => 1 } @tmp;
 		}
 	}
 
-	return undef;
+	# Check against exemptions in the config 
+	# nickname exemptions e.g. "nickname" (ignores all lines from nickname)
+	# channel exemptions  e.g. "#channel" (ignore all lines from channel #channel)
+	# exempt all on a server   (ignore all messages for any channel/nickname on this server)
+	# Returns true if there is a matching exemption and false otherwise
+	return sub {
+		my ($irc) = @_;
+		my $servername = $irc->servername;
+		my $nick = lc($irc->nick);
+		my $channel = lc($irc->target);
+		if (exists($exemptions{$servername}) && 
+			exists($exemptions{$servername}{$channel}) || 
+			exists($exemptions{$servername}{$nick})) {
+			return 1;
+		}
+		return 0;
+	};
 }
 
 sub run
@@ -231,7 +198,8 @@ sub run
     my $text = $irc->text;
 
 	# Check if we should ignore this line due to an exemption
-	if (linkbot_exemptions($irc)) {
+	if ($is_exempt->($irc)) {
+#		print STDERR sprintf("linkbot exempting message from: %s nick: %s channel: %s\n", $irc->servername, $irc->nick, $irc->target);
 		return;
 	}
 
@@ -245,12 +213,12 @@ sub run
             next;
         }
 
-        my ($title, $err) = gettitle($uri);
+        my ($title, $err) = get_title($uri);
         if ($err) {
             print STDERR "Failed to retrieve $uri: $err\n";
             next;
         }
-        my $threat = threatcheck($uri);
+        my $threat = $threat_check->($uri);
         my $tinyurl = mod_perl::modules::utils::tinyurl($uri);
         $irc->say(" $tinyurl :: $threat :: $title ");
     }
