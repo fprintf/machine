@@ -51,7 +51,7 @@ sub lookup {
 	my $key = $mod_perl::config::conf{wolfram_api_key};
 	$wolfram_api =~ s/__KEY__/$key/;
 
-	my $doc = wolfram_getXMLdoc($irc, $wolfram_api . $query);
+	my $doc = wolfram_getXMLdoc($irc, $wolfram_api . uri_escape($query));
 	return if (!$doc);
 
 	my @pods = $doc->findnodes('//pod[@primary="true"]');

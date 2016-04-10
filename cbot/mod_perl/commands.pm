@@ -34,6 +34,7 @@ sub load_modules {
 
 		while (my $module = readdir($dh)) {
 			next if ($module =~ /^\.*$/);
+			next if ($module !~ /\.pm$/);
 			$module =~ s/\.pm$//;
 			eval "use mod_perl::modules::$module";
 			if ($@) {
