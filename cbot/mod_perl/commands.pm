@@ -36,7 +36,7 @@ sub load_modules {
 			next if ($module =~ /^\.*$/);
 			next if ($module !~ /\.pm$/);
 			$module =~ s/\.pm$//;
-			eval "use mod_perl::modules::$module";
+			eval "use lib '$module_path'; use $module";
 			if ($@) {
 				print STDERR "Failed to load module: $module: $@";
 				next;
