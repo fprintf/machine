@@ -13,11 +13,12 @@ mod_perl::commands::register_command('feeds', \&run);
 
 sub feeds_help {
 	my $irc = shift;
-    $irc->say("usage: feeds [--list] [--add <name> <source>] [--search <pattern> [source]] <source> [source ...]");
+    $irc->say("usage: feeds [--limit <limit>] [--list] [--add <name> <source>] [--search <pattern> [source]] <source> [source ...]");
     $irc->say("-> RSS show feeds from various sources");
     $irc->say("-> 'list' list the available sources");
     $irc->say("-> 'add' add a new feed, requires a name and a feed url");
     $irc->say("-> 'search' searches all the feeds (or feeds matching pattern [source]) for the given pattern");
+    $irc->say("-> 'limit' limit the number of output results to 'display_limit'");
     return;
 }
 
@@ -77,7 +78,8 @@ sub feeds_search {
 }
 
 sub feeds_lookup {
-	my ($irc, $name) = @_;
+	my ($irc, $name, $limit) = @_;
+	$limit ||= 1; # Default to only showing the first item
 
 	# Handle paging requests (repeated lookup for same feed, shows more results, no further lookups)
 	my $feed = eval { $Feeds->get_latest($name) };
@@ -87,23 +89,42 @@ sub feeds_lookup {
 	}
 
 	my $count;
-	foreach my $entry ($feed->entries()) {
-		# Print feed title on first iteration
-		if (!$count) { $irc->say($feed->title); }
+	my $prefix = sprintf("[%s]", $feed->title);
+	my @entries = $feed->entries();
+
+	my $format = sub { return sprintf("%s %s :: %s", @_); };
+	foreach my $entry (@entries) {
+		# Print feed title on first iteration (only if printing more than 1 item)
+		if (!$count && $limit > 1) { 
+			$irc->say($feed->title); 
+			$prefix = '*';
+		}
 
 		my $title = $entry->title();
 		my $link = mod_perl::modules::utils::tinyurl($entry->link());
-		$irc->say(sprintf("* %s :: %s", $title, $link));
+		$irc->say($format->($prefix, $title, $link));
 
 		# Reached limit
-		last if (++$count >= 5);
+		last if (++$count >= $limit);
+	}
+
+	# If they're already spamming, lets just give them a url with everything else
+	if ($limit > 3 && $count < scalar(@entries)) {
+		my $content = $feed->title . "\n";
+		for (; $count < scalar(@entries); ++$count) {
+			my $entry = $entries[$count];
+			$content .= $format->($prefix, $entry->title, $entry->link) . "\n";
+		}
+
+		my $url = mod_perl::modules::utils::upload_content($content);
+		$irc->say($url);
 	}
 }
 
 sub run {
     my ($irc, $arg) = @_;
     my %opt;
-    my ($ret, @argv) = mod_perl::commands::handle_arg(\%opt, $irc, \&feeds_help, $arg, qw(list|l add|a help|h search|s));
+    my ($ret, @argv) = mod_perl::commands::handle_arg(\%opt, $irc, \&feeds_help, $arg, qw(list|l limit|L=i add|a help|h search|s));
     return if (!$ret);
 
 	# Make sure we're up to date on each run, this only does something if the file changed
@@ -120,7 +141,7 @@ sub run {
 
 	foreach my $f (@argv) {
 		$f = lc($f);
-		feeds_lookup($irc, $f);
+		feeds_lookup($irc, $f, $opt{limit});
 	}
 }
 

@@ -167,9 +167,9 @@ sub make_exempt_checker {
 	# for quick lookup purposes
 	my %exemptions;
 	while (my ($name, $val) = each %{$mod_perl::config::conf{servers}}) {
-		my @tmp = @{$val->{linkbot_exemptions}};
+		my @tmp = @{$val->{linkbot_exemptions} || []};
 		if (@tmp) {
-			$exemptions{$name} = map { $_ => 1 } @tmp;
+			$exemptions{$name} = { map { $_ => 1 } @tmp };
 		}
 	}
 
@@ -181,8 +181,10 @@ sub make_exempt_checker {
 	return sub {
 		my ($irc) = @_;
 		my $servername = $irc->servername;
-		my $nick = lc($irc->nick);
-		my $channel = lc($irc->target);
+		my $nick = $irc->nick;
+		my $channel = $irc->target;
+#		use Data::Dumper;
+#		print STDERR "checking $servername and $channel and $nick against:", Dumper(\%exemptions), "\n";
 		if (exists($exemptions{$servername}) && 
 			exists($exemptions{$servername}{$channel}) || 
 			exists($exemptions{$servername}{$nick})) {
