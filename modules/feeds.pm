@@ -6,10 +6,16 @@ use warnings;
 
 use mod_perl::modules::utils;
 
+use Cache::FastMmap;
+
 # Holds access to our feeds database within this process
 my $Feeds = Feeds->new(path => $mod_perl::config::module_db);
+# Our shared process cache for caching results from feeds so to see if they changed
+my $Cache = Cache::FastMmap->new();
 mod_perl::commands::register_command('feeds', \&run);
 
+# Every ping * some interval, check to see if feeds changed
+mod_perl::commands::register_handler('PING', \&feeds_latest);
 
 sub feeds_help {
 	my $irc = shift;
@@ -20,6 +26,16 @@ sub feeds_help {
     $irc->say("-> 'search' searches all the feeds (or feeds matching pattern [source]) for the given pattern");
     $irc->say("-> 'limit' limit the number of output results to 'display_limit'");
     return;
+}
+
+sub feeds_latest {
+	my ($irc) = @_;
+	# TODO this needs to be read from the db and be live-editible
+	# we'll add a settings table to the db to handle this
+	my @feeds_to_check = (
+		'nytimes', 'reuters', 'cnn', 'huffpost',
+	);
+
 }
 
 

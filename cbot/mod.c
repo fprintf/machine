@@ -8,6 +8,7 @@
 #include <stdbool.h>
 #include <stdlib.h>      /* for exit() and etc.. */
 #include <string.h>      /* for strerror() */
+#include <assert.h>
 
 /* IPC/msg routines */
 #include <sys/types.h>
@@ -58,6 +59,14 @@ struct worker_ctx {
     bool restart_loop;
 };
 
+/* Hash table of workers */
+struct worker_group {
+	struct htable * group;
+	size_t count; // current number of workers
+	size_t limit; // max number of workers
+};
+static struct worker_group worker_group;
+
 /* Master list of workers */
 static const struct worker_list {
     struct event_base * main_evbase; /* Evbase we need to free in our children */
@@ -70,6 +79,7 @@ static const struct worker_list {
     SLIST_HEAD(workers, worker) * list;
 } worker_list_initializer;
 static struct worker_list * worker_list;
+
 
 
 /* Forward declaration */
@@ -260,9 +270,8 @@ static void worker_free(struct worker * worker)
 {
     if (!worker) 
         return;
-    /* Kill and wait for pid */
-    kill(worker->pid, SIGHUP);
-    waitpid(0, NULL, -1);
+//    kill(worker->pid, SIGHUP);
+//    waitpid(0, NULL, -1);
 
     /* Free resources */
     close(worker->sock);
@@ -327,6 +336,118 @@ static struct worker_list * workers_free(struct worker_list * wl)
     free(wl->list);
     free(wl);
     return NULL;
+}
+
+/* Wrapper to pass worker_free function to htable.free_cb() */
+static void worker_free_wrapper(const char * key, void * data) {
+	worker_free(data);
+}
+
+/* Destroy the global worker group table and 
+   reset active worker count to zero 
+ */
+static void wg_free() {
+	htable.free_cb(worker_group.group, worker_free_wrapper);
+	worker_group.group = NULL;
+
+	for (; worker_group.count > 0; --worker_group.count) {
+		/* Wait for workers to exit */
+		waitpid(0, NULL, -1);
+	}
+}
+
+void wg_fork(struct event_base * evbase, pid_t child) {
+	/* Init our global worker_group singleton */
+	if (!worker_group.group) {
+		worker_group.limit = MAX_WORKERS;
+		worker_group.group = htable.new(worker_group.limit * 4);
+	}
+
+	if (child > 0) {
+		assert(worker_group.count > 0);
+		--worker_group.count;
+	}
+
+    for (; worker_group.count < worker_group.limit; ++worker_group.count) {
+        int sockpair[2];
+        pid_t pid;
+
+        if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockpair) == -1) {
+            perror("workers_init socketpair");
+			wg_free();
+            break;
+        }
+
+		/* Fork */
+        switch (pid = fork()) {
+			case 0:
+			/******************
+			 * Child process *
+			 ******************/
+			close(sockpair[1]); /* Close parent side of socketpair */
+			/* Need to free our primary eventbase in the child
+			 * every time we launch a new child */
+			if (evbase) {
+				/* we MUST reinit before freeing or else everything stops working */
+				event_reinit(evbase);
+				event_base_free(evbase); 
+			}
+			/* Close parents end of the socket */
+			printf("\n"); // TODO Flush stdout for some reason this is necessary?
+			/* Dup stdout in our child to the other end of our socket */
+			if (dup2(sockpair[0], STDOUT_FILENO) == -1) {
+				perror("workers_init dup2");
+				break;
+			}
+
+			/* Call our child function */
+			worker_init(sockpair[0]);
+
+			exit(0);
+			break;
+
+			case -1: 
+			perror("workers_init fork()"); 
+			break;
+
+			default: 
+			/******************
+			 * Parent process *
+			 ******************/
+			close(sockpair[0]); /* Close childs side of the socketpair */
+
+			struct worker * worker = malloc(sizeof *worker);
+			if (!worker) {
+				perror("workers_init malloc");
+				break;
+			}
+			*worker = (struct worker){
+				.pid = pid, 
+				.sock = sockpair[1]
+			};
+			worker->bev = bufferevent_socket_new(evbase, sockpair[1], 0);
+			bufferevent_setcb(worker->bev, parent_event_callback, NULL, NULL, &worker_group);
+			bufferevent_enable(worker->bev, EV_READ);
+
+			/* Store the worker in our hash table at the pid */
+			char pid_str[32];
+			snprintf(pid_str, sizeof pid_str, "%zu", (size_t)pid);
+			htable.store(worker_group.group, pid_str, worker);
+
+			log_debug("worker launch pid [%d] socket fd[%d]", worker->pid, worker->sock);
+
+			/* Cleanup reaped child if any */
+			if (child > 0) {
+				snprintf(pid_str, sizeof pid_str, "%zu", (size_t)child);
+				log_debug("removing pid [%d] from worker group", child);
+				worker = htable.delete(worker_group.group, pid_str);
+				worker_free(worker);
+			}
+			break;
+		} /* switch */
+	} /* for() */
+
+	return;
 }
 
 struct worker_list * workers_fork(struct event_base * evbase, register struct worker_list * wl, pid_t child)
@@ -460,18 +581,15 @@ int mod_conf_shutdown(void) {
 int mod_initialize(struct event_base * evbase)
 {
     struct worker * worker;
-    /* Init our config, prior to workers.. */
-    /* TODO */
     /* Init our worker modules, each of wich has it's own perl interpreter  */
     worker_list = workers_fork(evbase, NULL, 0);
     /* Init the Listeners for each child on the parent side */
-    /* Recreate any bufferevents if necessary */
     SLIST_FOREACH(worker, worker_list->list, next) {
         worker->bev = bufferevent_socket_new(evbase, worker->sock, 0);
         bufferevent_setcb(worker->bev, parent_event_callback, NULL, NULL, worker_list);
         bufferevent_enable(worker->bev, EV_READ);
-        log_debug("worker[%d]->bev[%p] with socket: %d", 
-                worker->pid, worker->bev, worker->sock);
+
+        log_debug("worker[%d]->bev[%p] with socket: %d", worker->pid, worker->bev, worker->sock);
     }
     /* Setup our sigchld catch */
     worker_list->childsig = evsignal_new(evbase, SIGCHLD, parent_sig_callback, worker_list);
