@@ -633,6 +633,12 @@ int mod_dispatch(struct irc * event)
     return 0;
 }
 
+void mod_random_dispatch(struct server * server, const char * line) {
+	/* TODO randomly select a child from the child hash and
+	   send the data to it -- this replaces mod_round_robin */
+
+}
+
 void mod_round_robin(struct server * server, const char * line)
 {
     char * data;

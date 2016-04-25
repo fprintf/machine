@@ -28,12 +28,15 @@ sub feeds_help {
     return;
 }
 
+#
+# Run on every ping and check to see if we need to update our feeds
+# based on the expire time stored in our cache
 sub feeds_latest {
 	my ($irc) = @_;
 	# TODO this needs to be read from the db and be live-editible
 	# we'll add a settings table to the db to handle this
 	my @feeds_to_check = (
-		'nytimes', 'reuters', 'cnn', 'huffpost',
+		'nytimes', 'reuters', 'cnn', 'huffpost', 'technica'
 	);
 
 }

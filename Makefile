@@ -4,10 +4,10 @@ CLEAN :=
 all: targets
 
 # Include all the subdirs Rules.mk files
-d  :=  cbot
+d  :=  src
 include $(d)/Rules.mk
 
-.PHONY: targets clean
+.PHONY: clean
 targets: $(TARGETS)
 
 clean: 
