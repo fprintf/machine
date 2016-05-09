@@ -6,6 +6,8 @@ use warnings;
 
 use mod_perl::modules::utils;
 
+use HTML::TreeBuilder;
+
 # Holds access to our feeds database within this process
 my $Feeds = Feeds->new(path => $mod_perl::config::module_db);
 mod_perl::commands::register_command('feeds', \&run);
@@ -103,6 +105,15 @@ sub feeds_lookup {
 		my $title = $entry->title();
 		my $link = mod_perl::modules::utils::tinyurl($entry->link());
 		$irc->say($format->($prefix, $title, $link));
+		# If we're only printing 1 feed, show it's description also
+		if ($limit == 1) {
+			my $tree = HTML::TreeBuilder->new;
+			$tree->parse($entry->content()->body);
+			my $summary = $tree->as_trimmed_text();
+
+			$summary = length($summary) > 420 ? substr($summary, 0, 420) . "..." : $summary;
+			$irc->say($summary);
+		}
 
 		# Reached limit
 		last if (++$count >= $limit);
@@ -111,9 +122,10 @@ sub feeds_lookup {
 	# If they're already spamming, lets just give them a url with everything else
 	if ($limit > 3 && $count < scalar(@entries)) {
 		my $content = $feed->title . "\n";
-		for (; $count < scalar(@entries); ++$count) {
+		for ($count = 0; $count < scalar(@entries); ++$count) {
 			my $entry = $entries[$count];
 			$content .= $format->($prefix, $entry->title, $entry->link) . "\n";
+			$content .= $entry->content()->body() . "\n";
 		}
 
 		my $url = mod_perl::modules::utils::upload_content($content);
@@ -347,6 +359,11 @@ sub url {
 sub title {
 	my $self = shift;
 	return $self->{_document}->title();
+}
+
+sub description {
+	my $self = shift;
+	return $self->{_document}->description();
 }
 
 sub entries {

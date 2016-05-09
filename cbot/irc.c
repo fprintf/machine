@@ -196,6 +196,11 @@ static int privmsg(struct irc * irc, const char * target, const char * msg)
 { 
     return printf("S%s PRIVMSG %s :%s\n", irc_server(irc), target, msg); 
 }
+
+static int privmsg_len(struct irc * irc, const char * target, const char * msg, size_t len) {
+	return printf("S%s PRIVMSG %s :%.*s\n", irc_server(irc), target, (int)len, msg);
+}
+
 static int cprivmsg(struct irc * irc, const char * target, const char * channel, const char * msg) 
 { 
     return printf("S%s CPRIVMSG %s %s :%s\n", irc_server(irc), target, channel,msg); 
@@ -204,9 +209,23 @@ static int notice(struct irc * irc, const char * target, const char * msg)
 { 
     return printf("S%s NOTICE %s :%s\n", irc_server(irc), target, msg); 
 }
+
+/* Say, splits msg up into 512 byte increments and sends it off */
 static int say(struct irc * irc, const char * msg) 
 { 
-    return printf("S%s PRIVMSG %s :%s\n", irc_server(irc), !strncmp(Msg.argv(irc->msg,0),"#",1) ? Msg.argv(irc->msg,0) : Msg.nick(irc->msg), msg); 
+	const char * target = !strncmp(Msg.argv(irc->msg, 0), "#", 1) ? Msg.argv(irc->msg, 0) : Msg.nick(irc->msg); 
+	size_t max_len = 512 - strlen(target) + sizeof "  :\r\n" + sizeof "PRIVMSG" + 2;
+	int r = 0;
+
+	const char * buf;
+	for (buf = msg; *buf; ++buf) {
+		if (!*(buf + 1) || buf - msg >= max_len) {
+			r += privmsg_len(irc, target, msg, buf - msg);
+			msg = buf;
+		}
+	}
+
+	return r; 
 }
 
 

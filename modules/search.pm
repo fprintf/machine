@@ -6,12 +6,13 @@ use strict;
 use warnings;
 
 #use lib '/home/dead/perl5/lib/perl5';
-use blib './IRC';
 use LWP::UserAgent;
 use JSON::XS;
 use URI::Escape;
 use Encode;
 use HTML::Entities;
+
+use Data::Dumper;
 
 my $google_api = $mod_perl::config::conf{google_api_url} || 
 'https://ajax.googleapis.com/ajax/services/search/web?v=1.0&q=';
@@ -47,6 +48,7 @@ sub lookup {
         my $content = $req->decoded_content;
         # Must ensure the data is encoded as utf-8 
         my $json = decode_json(encode('utf-8', $req->decoded_content));
+		print STDERR Dumper($json), "\n";
         my @results = @{$json->{responseData}->{results}};
 
         my $resultCount = $json->{responseData}->{cursor}->{resultCount} || 0;
@@ -144,6 +146,9 @@ sub google_run {
 		google_help($irc);
 		return;
 	}
+
+	$irc->say("Sorry, google has disabled their login-free API. This function disabled.");
+	return;
 
 	lookup($irc, $google_api, $arg);
 }
