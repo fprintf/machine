@@ -219,8 +219,8 @@ static int say(struct irc * irc, const char * msg)
 
 	const char * buf;
 	for (buf = msg; *buf; ++buf) {
-		if (!*(buf + 1) || buf - msg >= max_len) {
-			r += privmsg_len(irc, target, msg, buf - msg);
+		if (!*(buf + 1) || buf - msg + 1 >= max_len) {
+			r += privmsg_len(irc, target, msg, buf - msg + 1);
 			msg = buf;
 		}
 	}
