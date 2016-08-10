@@ -2,6 +2,7 @@ package mod_perl::modules::wolfram;
 
 use mod_perl::commands;
 use mod_perl::config;
+use mod_perl::modules::utils;
 use strict;
 use warnings;
 
@@ -29,7 +30,7 @@ sub wolfram_getXMLdoc
 
 	my $doc = undef;
 	if ($r->is_success) {
-		print STDERR "debug:".$r->decoded_content."\n";
+#		print STDERR "debug:".$r->decoded_content."\n";
 		$doc = $XML_PARSER->load_xml(string => $r->decoded_content);
 	} else {
 		$irc->say("[error] Couldn't retrieve '$source': ".$r->status_line);
@@ -47,6 +48,7 @@ sub wolfram_help {
 
 sub lookup {
     my ($irc, $query) = @_;
+	my $max_results = 5;
     my $ua = LWP::UserAgent->new;
 	my $key = $mod_perl::config::conf{wolfram_api_key};
 	$wolfram_api =~ s/__KEY__/$key/;
@@ -54,26 +56,39 @@ sub lookup {
 	my $doc = wolfram_getXMLdoc($irc, $wolfram_api . uri_escape($query));
 	return if (!$doc);
 
-	my @pods = $doc->findnodes('//pod[@primary="true"]');
-	unshift(@pods, $doc->findnodes('//pod[@title="Input"]'));
-	unshift(@pods, $doc->findnodes('//pod[@title="Input interpretation"]'));
+	my @pods = $doc->findnodes('//pod');
+	my $count = 0;
+	my $total_message = '';
 	foreach my $pod (@pods) {
-		my $message;
-		if ($pod->getAttribute('title')) { 
-			$message = "[WA] ". $pod->getAttribute('title');
+		foreach my $sub ($pod->findnodes('subpod')) {
+			my $message = '';
+			if ($pod->getAttribute('title')) { 
+				$message = "[".$pod->getAttribute('title')."]";
+			}
+			# Collapse newlines one line
+			my $result = $sub->find("plaintext")->to_literal;
+			$result =~ s/\n+/ | /g;
+			$message .= ' '. $result;
+			$total_message .= $message . "\n";
 		}
-		my $result = $pod->find('subpod//plaintext')->to_literal;
-		# Collapse newlines one line
-		$result =~ s/\n+/    /g;
-		$message .= ' || '. $result;
-		$irc->say($message);
 	}
+
+	# Print message line by line
+	my @lines = split(/\n/, $total_message);
+	foreach my $line (@lines[0 .. ($max_results - 1)]) {
+		$irc->say($line);
+	}
+	if (@lines > $max_results) {
+		my $url = mod_perl::modules::utils::upload_content(encode_utf8($total_message));
+		$irc->say($url);
+	}
+
 
 	if (!@pods) {
 		my @didyoumean = $doc->findnodes('//didyoumean');
 		my $error = 'No results.';
 		if (@didyoumean) { 
-			$error = join(" ", "Did you mean:", $didyoumean[0]->to_literal, "?"); 
+			$error = join(" ", "Did you mean:", join(", ", map { $_->to_literal } @didyoumean), "?"); 
 		}
 
 		$irc->say($error);

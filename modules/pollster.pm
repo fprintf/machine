@@ -77,6 +77,8 @@ sub list_objects {
 			my $poll_index = $opt{poll_number};
 			my %questions = map { $_->{name} => 1 } @{$json->[$poll_index]->{questions}};
 			return \@questions;
+		},
+		'polls' => sub {
 		}
 	);
 
@@ -125,7 +127,7 @@ sub chart {
 	push(@chart_lines, sprintf("(%d) %s [%s]", $json->{poll_count}, $json->{short_title} || $json->{title}, $timestamp));
 	my $i = 0;
 	foreach my $estimate (sort { $b->{lead_confidence} <=> $a->{lead_confidence} } @estimates) {
-		my $width = int($estimate->{value} / 2.5 + 0.5);
+		my $width = int($estimate->{value} / 2.5 + 0.5); # width in blocks representing increments of 2.5 rounded up
 		my $color = $colors[$i++ % scalar(@colors)];
 
 		push(@chart_lines, 
@@ -174,7 +176,7 @@ sub run {
 			my $current_year = (localtime())[5] + 1900;
 
 			my $data = list_objects($opt{list});
-			my @results = grep { $_ !~ /\d{4}/ || $_ =~ /$current_year/ } sort keys %$data;
+			my @results = sort keys %$data;
 			my $output = "$opt{list}s: ".join(", ", @results);
 
 			# Print the output in chunks or upload to a website if too long
