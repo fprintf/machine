@@ -3,11 +3,14 @@ package mod_perl::modules::linkbot;
 use LWP::UserAgent;
 use LWP::MediaTypes qw(guess_media_type);
 use HTML::TreeBuilder;
+use Time::Piece;
 
 use strict;
 use warnings;
 
 use mod_perl::modules::utils;
+use mod_perl::config;
+
 
 my $line_limit = 256; # Maximum characters to output for untitled text-like pages
 my %accepted_protocols = (
@@ -18,9 +21,23 @@ my %accepted_protocols = (
 # Create our exemption and threat checking functions
 my $is_exempt = make_exempt_checker();
 my $threat_check = make_threat_checker();
+# Get handle to our link database
+my $table_name = 'links';
+my $table_schema = qq(
+	CREATE TABLE IF NOT EXISTS $table_name (
+		`date` int,
+		`link` text primary key NOT NULL,
+		`title` text DEFAULT NULL,
+		`tinyurl` text DEFAULT NULL
+	)
+);
+my $links = Links->new(); # Links is a class defined within this file
 
 # Linkbot
 mod_perl::base::event_register('PRIVMSG', \&run);
+
+# Recall past links
+mod_perl::base::command_register('link', \&link_handler);
 
 sub get_user_agent
 {
@@ -222,8 +239,134 @@ sub run
         }
         my $threat = $threat_check->($uri);
         my $tinyurl = mod_perl::modules::utils::tinyurl($uri);
+		# Add link to database
+		$links->insert(title => $title, tinyurl => $tinyurl, link => $uri);
         $irc->say(" $tinyurl :: $threat :: $title ");
     }
 }
 
+#
+# Recall links from the database
+sub link_handler {
+	my ($irc, $arg_string) = @_;
+	my $max_results = 5;
+
+	# Allow searching links by title or link itself
+	# Allow retrieving (up to) last 5 links seen
+	# Allow looking up links by date posted
+	my $res = $links->search(title => $arg_string, link => $arg_string, tinyurl => $arg_string);
+	for (my $i = 0; $i < @$res && $i < $max_results; ++$i) {
+		my $data = $res->[$i];
+		my $t = localtime($data->{date});
+		$irc->say(sprintf("\00311[%02d]\003 (%s) %s \00311::\003 %s", $i + 1, 
+			$t->strftime("%m/%d/%Y"), 
+			$data->{title}, 
+			$data->{link}
+		));
+	}
+}
+
 1;
+
+package Links;
+
+use DBI;
+
+sub new {
+	my ($class) = shift;
+	my %opt = @_;
+	my $self = { 
+		%opt,
+		dbh => undef,
+	};
+	bless $self, $class;
+	$self->_create_table();
+
+	return $self;
+}
+
+sub DESTROY {
+	my $self = shift;
+	if ($self->{dbh}) {
+		$self->{dbh}->disconnect();
+	}
+}
+
+# Search the links table for links by passing
+# search criteria as a hashref. Start date and interval can also be passed to
+# limit the search to that day
+# 'title' => search the title of links
+# 'link' => search the link text itself
+# 'tinyurl' => search the tiny url for this link itself (this is not very useful) 
+# 'limit' => limit the search results to this many, defaults to 10 if unset, unlimited results NOT supported
+# TODO more granular search options not yet implemented:
+# 'start_date' => search forward by 'interval' or 5 days, starting at this date
+# 'interval' => search forward by this interval  if used with start_date, or search backward from today, if no start_date
+sub search {
+	my ($self, %pattern) = @_;
+	$pattern{limit} ||= 10;
+	my $query_template = "select {{columns}} from {{table_name}} {{where_clause}} {{order_by}}";
+	my $data = { 
+		sort_column => 'date',
+		columns => '*',
+		table_name => $table_name 
+	};
+	my @tmp;
+	my @bindings;
+	foreach my $type (qw(title link tinyurl)) {
+		if (exists($pattern{$type})) {
+			push(@tmp, sprintf("%s regexp ?", $type));
+			push(@bindings, $pattern{$type});
+		}
+	}
+	$data->{where_clause} = @tmp ? 'where ' . join(" OR ", @tmp) : '';
+	$data->{order_by} = sprintf('order by %s desc limit %d', $data->{sort_column}, $pattern{limit});
+
+	(my $query = $query_template) =~ s/{{(\S+)}}/$data->{$1}/eg;
+#	print STDERR "linkdb query: [$query] bindings: [".join(", ", @bindings)."\n";
+	my $ref = $self->{dbh}->selectall_arrayref($query, { Slice => {} }, @bindings);
+#	use Data::Dumper;
+#	print STDERR Dumper($ref);
+	return $ref;
+}
+
+# Insert a record into the links table
+# 'date' => date in UNIX time, defaults to current
+# 'link' => link itself (the url)
+# 'title' => title of link
+# 'tinyurl' => tiny url generated for this link
+sub insert {
+	my ($self, %opt) = @_;
+	my $query_template = "insert into %s (%s) values (%s)";
+	my @cols;
+	my @bindings;
+	$opt{date} ||= time;
+	foreach my $type (qw(date link title tinyurl)) {
+		if (exists($opt{$type})) {
+			push(@cols, $type);
+			push(@bindings, $opt{$type});
+		}
+	}
+
+	my $query = sprintf($query_template, 
+		$table_name, join(", ", @cols), join(", ", map { "?" } @cols)
+	);
+#	print STDERR "linkdb insert query: [$query]\n";
+	$self->{dbh}->do($query, {}, @bindings);
+}
+
+# Create link table if it doesn't exist already
+sub _create_table {
+	my $self = shift;
+	if (!$self->{dbh}) {
+		$self->{dbh}  = DBI->connect(
+			sprintf("dbi:SQLite:dbname=%s", $mod_perl::config::module_db),
+			'', ''
+		);
+	}
+#	print STDERR "creating table $table_schema\n";
+	$self->{dbh}->do($table_schema);
+}
+
+1;
+

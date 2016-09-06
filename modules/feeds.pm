@@ -197,6 +197,13 @@ sub new {
 	return $self->_create_table()->update();
 }
 
+sub DESTROY {
+	my $self = shift;
+	if ($self->{dbh}) {
+		$self->{dbh}->disconnect();
+	}
+}
+
 sub update {
 	my $self = shift;
 
