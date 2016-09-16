@@ -7,6 +7,7 @@ use warnings;
 use mod_perl::modules::utils;
 
 use HTML::TreeBuilder;
+use HTML::Entities;
 
 # Holds access to our feeds database within this process
 my $Feeds = Feeds->new(path => $mod_perl::config::module_db);
@@ -102,13 +103,13 @@ sub feeds_lookup {
 			$prefix = '*';
 		}
 
-		my $title = $entry->title();
+		my $title = decode_entities($entry->title());
 		my $link = mod_perl::modules::utils::tinyurl($entry->link());
 		$irc->say($format->($prefix, $title, $link));
 		# If we're only printing 1 feed, show it's description also
 		if ($limit == 1) {
 			my $tree = HTML::TreeBuilder->new;
-			$tree->parse($entry->content()->body);
+			$tree->parse($entry->content()->body || '');
 			my $summary = $tree->as_trimmed_text();
 
 			$summary = length($summary) > 420 ? substr($summary, 0, 420) . "..." : $summary;
