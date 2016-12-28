@@ -285,6 +285,21 @@ static int irc_reload(struct irc * irc)
 {
     return printf(":RELOAD\n");
 }
+/* Broadcast IRC event to all children */
+static int irc_broadcast(struct irc * irc)
+{
+	char tmpbuf[512] = {0};
+	snprintf(tmpbuf, sizeof tmpbuf, "S%s :%s!%s@%s %s %s :%s", 
+			irc->server->name, 
+			irc_nick(irc),
+			irc_real(irc),
+			irc_host(irc),
+			irc_command(irc), 
+			irc_target(irc) ? irc_target(irc) : "",
+			irc_text(irc) ? irc_text(irc) : ""
+	);
+    return printf(":BROADCAST %s\n", tmpbuf);
+}
 
 
 
@@ -307,6 +322,7 @@ const struct irc_api irc = {
 
     .connect = irc_connect,
     .reload = irc_reload,
+    .broadcast = irc_broadcast,
 
     /* Commands */
     .raw = raw,

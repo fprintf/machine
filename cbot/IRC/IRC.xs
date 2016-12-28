@@ -122,3 +122,11 @@ reload(event)
         RETVAL = irc.reload(event);
     OUTPUT:
         RETVAL
+
+int
+broadcast(event)
+	IRC event
+	CODE:
+		RETVAL = irc.broadcast(event);
+	OUTPUT:
+		RETVAL

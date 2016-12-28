@@ -26,6 +26,8 @@ struct irc_api {
     int (*connect)(struct irc * irc, const char * nick, const char * username, const char * host, unsigned int port, int ssl);  
     /* Reload perl scripts */
     int (*reload)(struct irc * irc);
+    /* Allows child to send the message as a broadcast to all children (including itself) */
+    int (*broadcast)(struct irc * irc);
 
     /* Actions/Output */
     int (*raw)(struct irc * irc, const char * msg); /* send raw server command */

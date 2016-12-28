@@ -315,8 +315,8 @@ sub search {
 	my @bindings;
 	foreach my $type (qw(title link tinyurl)) {
 		if (exists($pattern{$type})) {
-			push(@tmp, sprintf("%s regexp ?", $type));
-			push(@bindings, $pattern{$type});
+			push(@tmp, sprintf("%s like ?", $type));
+			push(@bindings, $pattern{$type} ? "%" . $pattern{$type} . "%" : "%");
 		}
 	}
 	$data->{where_clause} = @tmp ? 'where ' . join(" OR ", @tmp) : '';

@@ -195,6 +195,27 @@ static int workers_command_reload(const char * argline)
     return 0;
 }
 
+static int workers_command_broadcast(const char * argline)
+{
+    struct worker * worker = NULL;
+
+    log_debug("[debug] broadcasting [%s] to all children...", argline);
+
+    SLIST_FOREACH(worker, worker_list->list, next) {
+        if (worker->pid > 0) {
+			size_t len = strlen(argline);
+            log_debug("[debug] sending [%s] size %zu to %d", argline, len, worker->pid);
+			if (send(worker->sock, argline, len, 0) == -1) {
+				perror("broadcast send");
+			}
+        } else {
+            log_debug("[debug] empty worker container? pid: %d", worker->pid);
+        }
+    }
+
+	return 0;
+}
+
 static int workers_command(struct worker_list * wl, const char * command, const char * argline)
 {
     static struct htable * command_lookup;
@@ -205,6 +226,7 @@ static int workers_command(struct worker_list * wl, const char * command, const 
         /* Register our commands (declared above) */
         htable.store(command_lookup, "CONNECT", workers_command_connect);
         htable.store(command_lookup, "RELOAD", workers_command_reload);
+        htable.store(command_lookup, "BROADCAST", workers_command_broadcast);
      /* TODO commands */
      /* TODO htable.store(command_lookup, "RECONNECT", workers_command_reconnect);  */
      /* TODO htable.store(command_lookup, "DISCONNECT", workers_command_disconnect);  */
