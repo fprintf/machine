@@ -203,11 +203,13 @@ static int workers_command_broadcast(const char * argline)
 
     SLIST_FOREACH(worker, worker_list->list, next) {
         if (worker->pid > 0) {
-			size_t len = strlen(argline);
+			size_t len = strlen(argline) + 1;
             log_debug("[debug] sending [%s] size %zu to %d", argline, len, worker->pid);
 			if (send(worker->sock, argline, len, 0) == -1) {
 				perror("broadcast send");
 			}
+			/* Ensure CRLF is sent also */
+			send(worker->sock, "\r\n", 2, 0);
         } else {
             log_debug("[debug] empty worker container? pid: %d", worker->pid);
         }

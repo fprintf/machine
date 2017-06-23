@@ -6,7 +6,7 @@ use LWP::UserAgent;
 use URI::Escape;
 
 our $UserAgent;
-my $api_base = 'http://query.yahooapis.com/v1/public/yql?q=';
+my $api_base = 'https://query.yahooapis.com/v1/public/yql?q=';
 my $symbol_api_base = "http://autoc.finance.yahoo.com/autoc?query=";
 
 
@@ -117,7 +117,7 @@ sub run {
 
 	my $symbols = join(', ', map { $_=uc("\"$_\""); } @argv);
 	my $api_query = uri_escape("select * from yahoo.finance.quotes where symbol in ($symbols)");
-	my $api_params = "&env=http://datatables.org/alltables.env&format=json";
+	my $api_params = "&format=json&env=store://datatables.org/alltableswithkeys";
 	my $json = yql_query($msg, join('',$api_base,$api_query,$api_params));
 	return if !$json;
 

@@ -214,14 +214,14 @@ static int notice(struct irc * irc, const char * target, const char * msg)
 static int say(struct irc * irc, const char * msg) 
 { 
 	const char * target = !strncmp(Msg.argv(irc->msg, 0), "#", 1) ? Msg.argv(irc->msg, 0) : Msg.nick(irc->msg); 
-	size_t max_len = 512 - strlen(target) + sizeof "  :\r\n" + sizeof "PRIVMSG" + 2;
+	size_t max_len = 512 - (strlen(target) + sizeof "  :\r\n" + sizeof "PRIVMSG" + 2 + 50);
 	int r = 0;
 
 	const char * buf;
 	for (buf = msg; *buf; ++buf) {
 		if (!*(buf + 1) || buf - msg + 1 >= max_len) {
 			r += privmsg_len(irc, target, msg, buf - msg + 1);
-			msg = buf;
+			msg = buf + 1;
 		}
 	}
 
@@ -290,7 +290,7 @@ static int irc_broadcast(struct irc * irc)
 {
 	char tmpbuf[512] = {0};
 	snprintf(tmpbuf, sizeof tmpbuf, "S%s :%s!%s@%s %s %s :%s", 
-			irc->server->name, 
+			irc_server(irc),
 			irc_nick(irc),
 			irc_real(irc),
 			irc_host(irc),

@@ -14,6 +14,7 @@ use HTML::Entities;
 
 my $wolfram_api = $mod_perl::config::conf{wolfram_api_url} || 
 'https://api.wolframalpha.com/v2/query?format=plaintext&appid=__KEY__&input=';
+my $wolfram_alpha_link = 'http://www.wolframalpha.com/input/?i=';
 
 mod_perl::commands::register_command('wa', \&wolfram_run);
 mod_perl::commands::register_command('wolfram', \&wolfram_run);
@@ -59,27 +60,30 @@ sub lookup {
 	my @pods = $doc->findnodes('//pod');
 	my $count = 0;
 	my $total_message = '';
+	my $title = '';
 	foreach my $pod (@pods) {
 		foreach my $sub ($pod->findnodes('subpod')) {
 			my $message = '';
-			if ($pod->getAttribute('title')) { 
-				$message = "[".$pod->getAttribute('title')."]";
-			}
 			# Collapse newlines one line
 			my $result = $sub->find("plaintext")->to_literal;
-			$result =~ s/\n+/ | /g;
-			$message .= ' '. $result;
-			$total_message .= $message . "\n";
+			$result =~ s/[\r\n]+/ /g;
+			if ($pod->getAttribute('id') eq 'Input' && $pod->getAttribute('title')) { 
+				$title = $result;
+			} else {
+				$message = $result;
+				$total_message .= $message . "\n";
+			}
 		}
 	}
 
 	# Print message line by line
+	$total_message = "\00303$title\003: " . $total_message if ($title);
 	my @lines = split(/\n/, $total_message);
 	foreach my $line (@lines[0 .. ($max_results - 1)]) {
 		$irc->say($line);
 	}
 	if (@lines > $max_results) {
-		my $url = mod_perl::modules::utils::upload_content(encode_utf8($total_message));
+		my $url = $wolfram_alpha_link . uri_escape($query);
 		$irc->say($url);
 	}
 
