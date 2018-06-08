@@ -9,41 +9,27 @@ use mod_perl::config;
 
 use Getopt::Long qw(:config no_ignore_case);
 use Safe;
-
+use Module::Pluggable 
+	require => 1, 
+	search_dirs => [$mod_perl::config::conf{module_path}, @mod_perl::config::module_dirs],
+	search_path => ['mod_perl::modules', 'mod_perl::commands'];
 
 # MAIN
 load_modules();
 
 # END MAIN
+sub new {
+	my $class = shift;
+	my $self = {};
+	return bless \$self, $class;
+}
 
 sub load_modules {
-	print "Loading modules\n";
-	push(@mod_perl::config::module_dirs, $mod_perl::config::conf{module_path});
-	foreach my $module_path (@mod_perl::config::module_dirs) {
-		print "Searching for modules in $module_path\n";
-		if (! -e $module_path) {
-			print STDERR "Module directory doesn't exist: $module_path\n";
-			next;
-		}
-
-		my $dh;
-		if (!opendir($dh, $module_path)) {
-			print STDERR "Failed to read $module_path: $!\n";
-			next;
-		}
-
-		while (my $module = readdir($dh)) {
-			next if ($module =~ /^\.*$/);
-			next if ($module !~ /\.pm$/);
-			$module =~ s/\.pm$//;
-			eval "use lib '$module_path'; use $module";
-			if ($@) {
-				print STDERR "Failed to load module: $module: $@";
-				next;
-			}
-			print "Loaded module: $module\n";
-		}
-	}
+	print "Loading modules...\n";
+	print "Directories: " . join(" ", @mod_perl::config::module_dirs, $mod_perl::config::conf{module_path}). "\n";
+	my $self = mod_perl::commands->new();
+	my @plugins = $self->plugins();
+	print "modules: " . join(", ", @plugins) . "\n";
 }
 
 

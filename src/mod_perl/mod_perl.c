@@ -129,8 +129,7 @@ static SV * mod_perl_call(SV * href, SV * sub)
    with the href */
 static SV * mod_perl_call_simple(SV * href, const char * sub)
 {
-	SV * nsv;
-	nsv = mod_newSVpv(sub);
+	SV * nsv = mod_newSVpv(sub);
 	mod_perl_call(href, nsv);
 	return nsv;
 }
