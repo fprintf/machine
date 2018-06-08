@@ -1,14 +1,5 @@
-TARGETS := 
-CLEAN :=
-
-all: targets
-
-# Include all the subdirs Rules.mk files
-d  :=  cbot
-include $(d)/Rules.mk
-
-.PHONY: targets clean
-targets: $(TARGETS)
+all: 
+	$(MAKE) -C src
 
 clean: 
-	$(RM) -f $(CLEAN)
+	$(MAKE) -C src clean
