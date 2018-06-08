@@ -3,7 +3,7 @@ MODSRC=mod_perl/mod_perl.c
 OBJ=$(patsubst %.c,%.o,$(SRC)) 
 MODOBJ=$(patsubst %.c,%.o,$(MODSRC))
 SLIB=libirc.so
-CFLAGS=-ggdb -Wall -DNDEBUG
+CFLAGS=-ggdb -Wall -DNDEBUG -Wl,-rpath=../share/lib
 PERLLIB=`perl -MExtUtils::Embed -e ccopts -e ldopts`
 prog=client
 LIBEVENT_TARBALL=libevent-2.0.21-stable.tar.gz

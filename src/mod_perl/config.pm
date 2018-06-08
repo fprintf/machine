@@ -43,6 +43,7 @@ sub load_config
 		"/etc/cbot/modules" 
 	);
 
+	print "Loading config $path\n";
 	do $path;
 }
 

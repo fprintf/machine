@@ -219,7 +219,8 @@ sub update {
 	my $feeds = $self->{dbh}->selectall_hashref("select * from feeds", 'name');
 
 	if (!scalar(keys %$feeds)) {
-		die "No feeds found in database, probably something went wrong.\n";
+		warn "No feeds found in database, probably something went wrong, skipping update\n";
+		return $self;
 	}
 
 	# Load list of feeds into Feed objects but don't parse the content yet

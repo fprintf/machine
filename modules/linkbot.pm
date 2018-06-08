@@ -153,9 +153,9 @@ sub make_threat_checker {
 
 		# Decide threat of a site based on alexa rank and google rank
 		# and if there are redirects and if the domain age 
-		my $grank = "".$doc->getElementsByTagName('google_page_rank')->to_literal;
-		my $alexa = "".$doc->getElementsByTagName('alexa_rank')->to_literal;
-		my $domain_age = "".$doc->getElementsByTagName('domain_age')->to_literal;
+		my $grank = int("".$doc->getElementsByTagName('google_page_rank')->to_literal);
+		my $alexa = int("".$doc->getElementsByTagName('alexa_rank')->to_literal);
+		my $domain_age = int("".$doc->getElementsByTagName('domain_age')->to_literal);
 
 		my $rank = $grank + $alexa;
 		my $good_threshold = 1000;
@@ -322,7 +322,7 @@ sub search {
 	$data->{where_clause} = @tmp ? 'where ' . join(" OR ", @tmp) : '';
 	$data->{order_by} = sprintf('order by %s desc limit %d', $data->{sort_column}, $pattern{limit});
 
-	(my $query = $query_template) =~ s/{{(\S+)}}/$data->{$1}/eg;
+	(my $query = $query_template) =~ s/\{\{(\S+)}}/$data->{$1}/eg;
 #	print STDERR "linkdb query: [$query] bindings: [".join(", ", @bindings)."\n";
 	my $ref = $self->{dbh}->selectall_arrayref($query, { Slice => {} }, @bindings);
 #	use Data::Dumper;

@@ -3,6 +3,7 @@
 
 use strict;
 use warnings;
+use lib '.';
 require mod_perl::base;
 require mod_perl::commands;
 use mod_perl::config;
