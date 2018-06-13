@@ -8,12 +8,14 @@ use strict;
 use warnings;
 
 use LWP::UserAgent;
+use WWW::Shorten 'TinyURL', ':short';
+use Try::Tiny;
 
 use constant MIN_LENGTH => 25;
 
 =pod
 
-=head2 tinurl
+=head2 tinyurl
 
 Takes a $url to shorten and an optional shortening site address
 otherwise uses a random shortener from a builtin list.
@@ -33,30 +35,18 @@ The URL to shorten
 
 sub tinyurl {
     my ($uri) = @_;
-    my @minimizers = (
-		'https://is.gd/create.php?format=simple&url=',
-		'https://v.gd/create.php?format=simple&url=',
-	);
-	my $ua = new LWP::UserAgent;
-	# Don't bother shortening if it's already this short
 
-    # Already short enough, don't bother
+	# Don't bother shortening if it's already this short
     if (length($uri) < MIN_LENGTH) {
         return $uri;
     }
-
-    my $query = sprintf("%s%s", $minimizers[int(rand(@minimizers))], $uri);
-	my $r = $ua->get($query);
-    my $tinyurl = '';
-
-	if ($r->is_success) {
-        $tinyurl = $r->decoded_content();
-	} else {
-        print STDERR "failed to shorten: $uri: ".$r->status_line."\n";
-		$tinyurl = "can't shorten";
-	}
-
-    return $tinyurl;
+	my $short_url = $uri;
+	try {
+		$short_url = short_link($uri);
+	} catch { 
+		warn "Failed to shorten $uri: $_";
+	};
+	return $short_url;
 }
 
 =pod
@@ -81,10 +71,10 @@ The content to upload, stored as string.
 
 sub upload_content {
 	my $content = shift;
-	my $host = 'http://sprunge.us';
 	my $ua = LWP::UserAgent->new;
+	my $host = 'http://paste.drains.me';
 
-	my $res = $ua->post($host, 'Content-Type' => 'form-data', 'Content' => [ sprunge => $content ]);
+	my $res = $ua->post($host, 'Content-Type' => 'form-data', 'Content' => [ f => $content ]);
 	my $url;
 	if ($res->is_success()) {
 		chomp($url = $res->decoded_content());
