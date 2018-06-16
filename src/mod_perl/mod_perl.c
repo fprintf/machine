@@ -13,7 +13,13 @@
 #include "../xstr.h"
 #include "../log.h"
 
-#define MOD_PERL_BOOT_DFLT "mod_perl/boot.pl"
+#define STRINGIFYX(a) #a
+#define STRINGIFY(a) STRINGIFYX(a)
+
+#ifndef MOD_BOOTSCRIPT_DIR
+#define MOD_BOOTSCRIPT_DIR ./
+#endif
+#define MOD_PERL_BOOT_DFLT STRINGIFY(MOD_BOOTSCRIPT_DIR) "boot.pl"
 #define MOD_PERL_CONF_NAME "mod_perl::config::conf"
 /* Beware side-effects */
 #define mod_newSVpv(s) ( newSVpvn((s), (s) ? strlen(s) : 0) )
@@ -38,7 +44,7 @@ static struct mp {
     const char * boot; /* Path to boot script */
     short int init; /* Is my_perl initialized? */
 } mp_state = {
-    .boot = MOD_PERL_BOOT_DFLT,
+    .boot = (MOD_PERL_BOOT_DFLT),
     .init = 0,
 };
 
