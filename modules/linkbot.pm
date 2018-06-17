@@ -67,8 +67,7 @@ sub humanBytes {
     return "$bytes$units[$unit_measure]";
 }
 
-sub get_title
-{
+sub get_title {
 	my ($source) = @_;
 
     my $err = undef;
@@ -91,6 +90,7 @@ sub get_title
 		my $doc;
 		if ($r->is_success) {
 			$doc = $parser->parse_content($r->decoded_content);
+			$err = undef; # ignore any HEAD request errors now
 		} else {
 			$err = $r->status_line;
 		}
