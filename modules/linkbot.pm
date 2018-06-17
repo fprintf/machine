@@ -77,16 +77,10 @@ sub get_title
     my $ua = get_user_agent();
 	my $r = $ua->head($source);
     my $content_type = 'html'; 
-	if (!$r->is_success()) {
-		my $get = $ua->get($source);
-		if (!$get->is_success) {
-			$err = $r->status_line;
-		} else {
-			$r = $get;
-		}
-	}
 	if ($r->is_success) {
 		$content_type = $r->header('Content-Type');
+	} else {
+		$err = $r->status_line;
 	}
 
 	# Assume html if our head request failed
