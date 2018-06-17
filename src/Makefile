@@ -10,7 +10,7 @@ MODOBJ=$(patsubst %.c,%.o,$(MODSRC))
 SLIB=libirc.so
 CFLAGS=-ggdb -Wall -DNDEBUG -Wl,-rpath=$(SHAREDIR)/lib
 PERLLIB=`perl -MExtUtils::Embed -e ccopts -e ldopts`
-prog=client
+prog=machine
 LIBEVENT_TARBALL=libevent-2.0.21-stable.tar.gz
 LIBEVENT_DIR=libevent-2.0.21-stable
 LIBEVENT=$(SHAREDIR)/lib/libevent.so

@@ -2,7 +2,8 @@ package mod_perl::commands;
 use strict;
 use warnings;
 
-use blib 'IRC';
+use FindBin;
+use blib "$FindBin::Bin/../IRC";
 use IRC;
 use mod_perl::base;
 use mod_perl::config;

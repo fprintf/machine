@@ -3,7 +3,10 @@
 
 use strict;
 use warnings;
-use lib '.';
+
+use FindBin;
+use lib "$FindBin::Bin/../"; # include current directory as library path
+
 require mod_perl::base;
 require mod_perl::commands;
 use mod_perl::config;
