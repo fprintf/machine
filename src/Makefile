@@ -17,6 +17,12 @@ LIBEVENT=$(SHAREDIR)/lib/libevent.so
 PERLMOD_DIR=$(SRCDIR)/IRC
 PERLMOD=$(PERLMOD_DIR)/blib/lib/IRC.pm
 
+# INSTALL VARIABLES
+PREFIX=
+BINDIR=$(PREFIX)/bin
+LIBDIR=$(PREFIX)/lib
+DATADIR=$(PREFIX)/share/$(prog)
+
 # Targets which should always be made regardless if they dont need to be
 .PHONY: clean
 

@@ -2,6 +2,7 @@ package mod_perl::modules::linkbot;
 
 use LWP::UserAgent;
 use LWP::MediaTypes qw(guess_media_type);
+use HTTP::Message;
 use HTML::TreeBuilder;
 use Time::Piece;
 
@@ -49,7 +50,7 @@ sub get_user_agent
 	);
 
 	$ua->default_header('Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8');
-	$ua->default_header('Accept-Encoding' => 'gzip, deflate, br');
+	$ua->default_header('Accept-Encoding' => 'gzip, deflate');
 	$ua->default_header('Accept-Language' => 'en-US,en;q=0.5');
 
     return $ua;
@@ -85,9 +86,9 @@ sub get_title {
 	# Assume html if our head request failed
 	if ($content_type =~ /html/io) {
 		# We must perform a GET now to get the <title> and <h2> elements
-		$r = $ua->get($source);
 		my $parser = HTML::TreeBuilder->new;
 		my $doc;
+		$r = $ua->get($source);
 		if ($r->is_success) {
 			$doc = $parser->parse_content($r->decoded_content);
 			$err = undef; # ignore any HEAD request errors now
@@ -102,12 +103,18 @@ sub get_title {
 
 		# Get title or first h2 element
 		if ( ($title = $doc->find('title')) ) {
+			print STDERR "got title: ".$title->as_trimmed_text()."\n";
 			$title = $title->as_trimmed_text();
 		} elsif ( ($title = $doc->find('h2')) ) {
 			$title = $title->as_trimmed_text();
 		}
 	} elsif ($content_type =~ /text/io) {
-		$title = $r->decoded_content;
+		my $get = $ua->get($source);
+		if ($get->is_success) {
+			$title = $get->decoded_content;
+		} else {
+			$err = "text error:" . $get->status_line;
+		}
 	}
 
 	if ($title) {
@@ -140,6 +147,10 @@ sub make_threat_checker {
 		(my $host = $uri) =~ s/^\S+:\/\/(?:www)?\.?//;
 		$host =~ s/\/.*$//;
 		my $threat = $host;
+
+		if (!$mod_perl::config::conf{linkbot_threat_check}) {
+			return $host;
+		}
 
 		my $query = sprintf("%s/%s/host/%s/", $api->{uri}, $api->{key}, $host);
 		#print STDERR "threatcheck query: $query\n";
