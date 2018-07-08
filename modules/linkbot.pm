@@ -45,13 +45,8 @@ sub get_user_agent
 	my $ua = LWP::UserAgent->new(
 		'timeout' => 120,
 		'max_redirect' => 8,
-		'max_size' => 384 * 1024 * 1024,  # 384K
-		'agent' => 'Mozilla/5.0 (X11; Linux x86_64; rv:52.0) Gecko/20100101 Firefox/52.0'
+		'max_size' => 5 * 1024 * 1024 * 1024,  # 5MB
 	);
-
-	$ua->default_header('Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8');
-	$ua->default_header('Accept-Encoding' => 'gzip, deflate');
-	$ua->default_header('Accept-Language' => 'en-US,en;q=0.5');
 
     return $ua;
 }
@@ -78,7 +73,7 @@ sub get_title {
 	my $r = $ua->head($source);
     my $content_type = 'html'; 
 	if ($r->is_success) {
-		$content_type = $r->header('Content-Type');
+		$content_type = $r->header('Content-Type') || $content_type;
 	} else {
 		$err = $r->status_line;
 	}
@@ -90,7 +85,7 @@ sub get_title {
 		my $doc;
 		$r = $ua->get($source);
 		if ($r->is_success) {
-			$doc = $parser->parse_content($r->decoded_content);
+			$doc = $parser->parse_content($r->decoded_content());
 			$err = undef; # ignore any HEAD request errors now
 		} else {
 			$err = $r->status_line;
@@ -103,9 +98,14 @@ sub get_title {
 
 		# Get title or first h2 element
 		if ( ($title = $doc->find('title')) ) {
-			print STDERR "got title: ".$title->as_trimmed_text()."\n";
+#			print STDERR "got title: ".$title->as_trimmed_text()." for uri: $source\n";
+#			print STDERR " decoded content was: ".substr($r->decoded_content(), 0, 4096)."\n";
 			$title = $title->as_trimmed_text();
 		} elsif ( ($title = $doc->find('h2')) ) {
+			$title = $title->as_trimmed_text();
+		} elsif ( ($title = $doc->find('h3')) ) {
+			$title = $title->as_trimmed_text();
+		} elsif ( ($title = $doc->find('h4')) ) {
 			$title = $title->as_trimmed_text();
 		}
 	} elsif ($content_type =~ /text/io) {
