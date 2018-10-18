@@ -58,13 +58,21 @@ sub logchan {
 		$source = $irc->servername . ":" . $source;
 	}
 
-	# Add the entry if its not there already
 	if (!exists($logchan_routes{$source})) {
 		$logchan_routes{$source} = [];
 	}
 	my $entries = $logchan_routes{$source};
-	push(@{$logchan_routes{$source}}, $dest) if (!grep($dest, @$entries));
+	# Entry exists already, so delete it instead of adding anything
+	for (my $count = @$entries - 1; $count >= 0; --$count) {
+		if ($entries->[$count] eq $dest) {
+			splice(@$entries, $count, 1);
+			$irc->say("Deleted destination $dest for source $source");
+			return;
+		}
+	}
 
+	# Otherwise just add the entry
+	push(@{$logchan_routes{$source}}, $dest);
 	$irc->say("Added destination $dest for source $source");
 }
 
