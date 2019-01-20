@@ -61,10 +61,12 @@ sub feeds_search {
 		# We're only looking for feeds matching pattern '$limit' (or all feeds if no pattern given)
 		next if ($limit && $feed->name =~ $limit);
 
+		my $max = 25;
 		foreach my $entry ($feed->update()->entries()) {
 			if ($entry->title =~ $query) {
 				push(@results, sprintf("[%s] %s :: %s", $feed->title(), $entry->title, mod_perl::modules::utils::tinyurl($entry->link)));
 			}
+			last if --$max <= 0;
 		}
 	}
 
