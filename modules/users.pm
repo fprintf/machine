@@ -114,13 +114,16 @@ sub initdb {
 }
 
 # Get a write handle to the database
-sub get_writer {
-	my $self = shift;
+sub opendb {
+	my ($self, $mode) = @_;
 	my $tdb = TokyoCabinet::TDB->new();
 	my $dbfile = $self->{dbfile};
-	if (!$tdb->open($dbfile, $tdb->OWRITER | $tdb->OCREAT)) {
+
+	$mode ||= "r";
+	my $dbmode = $mode eq "w" ? $tdb->OWRITER | $tdb->OCREAT : $tdb->OREADER;
+	if (!$tdb->open($dbfile, $dbmode)) {
 		my $ecode = $tdb->ecode();
-		printf STDERR ("Error opening userdb %s+wc: %s\n", $dbfile, $tdb->errmsg($ecode));
+		printf STDERR ("Error opening userdb %s+%s: %s\n", $dbfile, $mode, $tdb->errmsg($ecode));
 		return;
 	}
 	return $tdb;
@@ -129,15 +132,13 @@ sub get_writer {
 # Get/lookup user from database
 sub get {
 	my ($self, %opt) = @_;
-	my $tdb = $self->{tdb};
 	my $dbfile = $self->{dbfile};
-	if (!$tdb->open($dbfile, $tdb->OREADER)) {
-		printf STDERR ("Failed to get user: %s: %s\n", $dbfile, $tdb->errmsg($tdb->ecode));
-		return;
+	my $tdb = $self->opendb("r");
+	if ($tdb) {
+		my $user = $tdb->get($opt{username});
+		$tdb->close();
+		return $user;
 	}
-	my $user = $tdb->get($opt{username});
-	$tdb->close();
-	return $user;
 }
 
 # Add user to the database
@@ -148,7 +149,7 @@ sub add {
 		username => $username,
 		feeds => "",
 	};
-	my $tdb = $self->get_writer();
+	my $tdb = $self->opendb("w");
 	if (!$tdb || !$tdb->put($username, $user)) {
 		my $error = $tdb && $tdb->errmsg($tdb->ecode()) || "Internal Error";
 		print STDERR "Failed to add new user: $user: $error\n";
@@ -171,7 +172,7 @@ sub update {
 	# Update user with data from options
 	$user = { %$user, %opt };
 
-	my $tdb = $self->get_writer();
+	my $tdb = $self->opendb("w");
 	if (!$tdb || !$tdb->put($username, $user)) {
 		my $error = $tdb && $tdb->errmsg($tdb->ecode()) || "Internal Error";
 		print STDERR "Failed to update user: $username: $error\n";
@@ -184,7 +185,7 @@ sub update {
 sub del {
 	my ($self, %opt) = @_;
 	my $username = $opt{username};
-	my $tdb = $self->get_writer();
+	my $tdb = $self->opendb("w");
 	if (!$tdb || !$tdb->out($username)) {
 		my $error = $tdb && $tdb->errmsg($tdb->ecode()) || "Internal Error";
 		print STDERR "Failed to delete user: $username: $error\n";
