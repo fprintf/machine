@@ -12,6 +12,7 @@ use HTML::Entities;
 # Holds access to our feeds database within this process
 my $Feeds = Feeds->new(path => $mod_perl::config::module_db);
 mod_perl::commands::register_command('feeds', \&run);
+mod_perl::commands::register_command('feed', \&run);
 
 
 sub feeds_help {
