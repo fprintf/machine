@@ -39,10 +39,6 @@ sub load_modules {
 ##################################################################
 sub handle_arg {
     my ($oref, $msg, $href, $arg, @ostr) = @_;
-    if (!$arg) {
-        ref($href) eq 'CODE' && $href->($msg);
-        return;
-    }
     my ($ret,$argv) = Getopt::Long::GetOptionsFromString($arg, $oref, @ostr);
 
     if (!$ret) {

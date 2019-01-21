@@ -1,11 +1,13 @@
 package mod_perl::modules::users;
 
-#use mod_perl::commands;
-#use mod_perl::config;
+use mod_perl::commands;
+use mod_perl::config;
 use strict;
 use warnings;
 
-my $Users = Users->get_instance();
+use JSON::XS;
+
+my $UsersDB = Users->get_instance(file => "$mod_perl::config::conf_dir/users.tct");
 mod_perl::commands::register_command('users', \&main);
 mod_perl::commands::register_command('user', \&main);
 
@@ -22,30 +24,30 @@ sub users_help {
 
 # Return the users instance to any other modules that might want to use it
 sub get_instance {
-	return $Users;
+	return $UsersDB;
 }
 
 sub main {
     my ($irc, $arg) = @_;
     my %opt;
-    my ($ret, @argv) = mod_perl::commands::handle_arg(\%opt, $irc, \&users_help, $arg, qw(list|l:s add|a=s help|h del|d=s set|s=s));
+    my ($ret, @argv) = mod_perl::commands::handle_arg(\%opt, $irc, \&users_help, $arg, qw(list|l add|a=s help|h del|d=s set|s=s));
     return if (!$ret);
 
 	if ($opt{list}) {
-		my $search = $opt{list};
-		$irc->say("Users: ".join(", ", $Users->list($search)));
+		my $search = $argv[0];
+		$irc->say("Users: ".join(", ", $UsersDB->list($search)));
 		return;
 	}
 
 	if ($opt{add}) { 
-		if (!$Users->add(username => $opt{add})) {
+		if (!$UsersDB->add(username => $opt{add})) {
 			$irc->say("Error adding user $opt{add}");
 		}
 		return;
 	}
 
 	if ($opt{del}) { 
-		if (!$Users->del(username => $opt{del})) {
+		if (!$UsersDB->del(username => $opt{del})) {
 			$irc->say("Error deleting user $opt{del}");
 		}
 		return;
@@ -53,11 +55,19 @@ sub main {
 
 	if ($opt{set} && @argv) { 
 		my $username = $irc->nick();
-		my $user = $Users->update(username => $username, "$opt{set}" => $argv[0]);
+		my $user = $UsersDB->update(username => $username, "$opt{set}" => $argv[0]);
 		if (!$user) {
 			$irc->say("Error updating user setting: $opt{set}!");
 		}
 		return;
+	}
+
+	# Print out user settings
+	foreach my $username (@argv) {
+		my $user = $UsersDB->get(username => $username);
+		next if (!$user);
+		delete($user->{password});
+		$irc->say("User $username: " . encode_json($user));
 	}
 }
 
@@ -71,7 +81,7 @@ use warnings;
 use TokyoCabinet;
 
 our $db_file = "$mod_perl::config::conf_dir/users.tct";
-our $db_ref = undef;
+our $db_ref;
 
 sub get_instance {
 	my $class = shift;
@@ -79,43 +89,38 @@ sub get_instance {
 
 	if (!$Users::db_ref) {
 		$Users::db_ref = bless {}, $class;
-		$Users::db_ref->initdb();
+		$Users::db_ref->initdb($opt{file});
 	}
 
 	return $Users::db_ref;
 }
 
 sub initdb {
-	my $self = shift;
+	my ($self, $dbfile) = @_;
 	return if ($self->{tdb});
 
 	my $tdb = TokyoCabinet::TDB->new();
+	$self->{tdb} = $tdb;
+	$self->{dbfile} = $dbfile;
 
-	if (!-e $Users::db_file) {
-		if (!$tdb->open($Users::db_file, $tdb->OWRITER | $tdb->OCREAT)) {
+	if (!-e $dbfile) {
+		if (!$tdb->open($dbfile, $tdb->OWRITER | $tdb->OCREAT)) {
 			my $ecode = $tdb->ecode();
-			printf STDERR ("Error opening userdb %s+wc: %s\n", $Users::db_file, $tdb->errmsg($ecode));
+			printf STDERR ("Error opening userdb %s+wc: %s\n", $dbfile, $tdb->errmsg($ecode));
 			return;
 		}
 		$tdb->close();
 	} 
-
-	if (!$tdb->open($Users::db_file, $tdb->OREADER | $tdb->ONLCK)) {
-		my $ecode = $tdb->ecode();
-		printf STDERR ("Error opening userdb %s+r: %s\n", $Users::db_file, $tdb->errmsg($ecode));
-		return;
-	}
-
-	$self->{tdb} = $tdb;
 }
 
 # Get a write handle to the database
 sub get_writer {
 	my $self = shift;
 	my $tdb = TokyoCabinet::TDB->new();
-	if (!$tdb->open($Users::db_file, $tdb->OWRITER | $tdb->OCREAT)) {
+	my $dbfile = $self->{dbfile};
+	if (!$tdb->open($dbfile, $tdb->OWRITER | $tdb->OCREAT)) {
 		my $ecode = $tdb->ecode();
-		printf STDERR ("Error opening userdb %s+wc: %s\n", $Users::db_file, $tdb->errmsg($ecode));
+		printf STDERR ("Error opening userdb %s+wc: %s\n", $dbfile, $tdb->errmsg($ecode));
 		return;
 	}
 	return $tdb;
@@ -125,7 +130,13 @@ sub get_writer {
 sub get {
 	my ($self, %opt) = @_;
 	my $tdb = $self->{tdb};
-	my $user = $tdb->get($opt{user});
+	my $dbfile = $self->{dbfile};
+	if (!$tdb->open($dbfile, $tdb->OREADER)) {
+		printf STDERR ("Failed to get user: %s: %s\n", $dbfile, $tdb->errmsg($tdb->ecode));
+		return;
+	}
+	my $user = $tdb->get($opt{username});
+	$tdb->close();
 	return $user;
 }
 
@@ -143,17 +154,17 @@ sub add {
 		print STDERR "Failed to add new user: $user: $error\n";
 		return;
 	}
-	# Sync changes with the read handle
-	return $self->{tdb}->sync();
+	# Success
+	return $tdb->close();
 }
 
 # Update user settings
 sub update {
 	my ($self, %opt) = @_;
 	my $username = $opt{username};
-	my $user = $self->get($username);
+	my $user = $self->get(username => $username);
 	if (!$user) {
-		print STDERR "No such user $user\n";
+		print STDERR "No such user $username\n";
 		return;
 	}
 
@@ -163,11 +174,10 @@ sub update {
 	my $tdb = $self->get_writer();
 	if (!$tdb || !$tdb->put($username, $user)) {
 		my $error = $tdb && $tdb->errmsg($tdb->ecode()) || "Internal Error";
-		print STDERR "Failed to add new user: $user: $error\n";
+		print STDERR "Failed to update user: $username: $error\n";
 		return;
 	}
-	# Sync changes with the read handle
-	return $self->{tdb}->sync();
+	return $tdb->close();
 }
 
 # Remove user from the database
@@ -180,8 +190,31 @@ sub del {
 		print STDERR "Failed to delete user: $username: $error\n";
 		return;
 	}
-	# Sync changes with the read handle
-	return $self->{tdb}->sync();
+	return $tdb->close();
+}
+
+# List users in the database
+sub list {
+	my ($self, $search) = @_;
+	my @results;
+	my $tdb = $self->{tdb};
+	my $value;
+	my $count = 0;
+	my $max = 25;
+
+	my $dbfile = $self->{dbfile};
+	if (!$tdb->open($dbfile, $tdb->OREADER)) {
+		print STDERR "Failed to list users in db: %s: %s\n", $dbfile, $tdb->errmsg($tdb->ecode);
+		return;
+	}
+	for ($tdb->iterinit(), $value = $tdb->iternext(); $value && $count < $max; $value = $tdb->iternext()) {
+		if (!$search || $value =~ /\Q$search\E/) {
+			push(@results, $value);
+			$count++;
+		}
+	}
+	$tdb->close();
+	return @results;
 }
 
 1;

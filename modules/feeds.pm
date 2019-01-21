@@ -1,10 +1,11 @@
 package mod_perl::modules::feeds;
 
-use mod_perl::config;
+#use mod_perl::config;
 use strict;
 use warnings;
 
 use mod_perl::modules::utils;
+use mod_perl::modules::users;
 
 use HTML::TreeBuilder;
 use HTML::Entities;
@@ -151,7 +152,17 @@ sub run {
 		return;
 	}
 
-	if (!@argv) { return feeds_help($irc); }
+	# If no argument, check if this user has a list of feeds, and show them
+	if (!@argv) { 
+		my $Users = mod_perl::modules::users::get_instance();
+		my $user = $Users->get(username => $irc->nick);
+		if ($user->{feeds}) {
+			@argv = split(/,/, $user->{feeds});
+		} else {
+			return feeds_help($irc); 
+		}
+	}
+
 	if ($opt{add}) { return feeds_add($irc, @argv); }
 	if ($opt{search}) { return feeds_search($irc, @argv); }
 
