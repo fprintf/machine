@@ -99,11 +99,10 @@ sub initdb {
 	my ($self, $dbfile) = @_;
 	return if ($self->{tdb});
 
-	my $tdb = TokyoCabinet::TDB->new();
-	$self->{tdb} = $tdb;
 	$self->{dbfile} = $dbfile;
 
 	if (!-e $dbfile) {
+		my $tdb = TokyoCabinet::TDB->new();
 		if (!$tdb->open($dbfile, $tdb->OWRITER | $tdb->OCREAT)) {
 			my $ecode = $tdb->ecode();
 			printf STDERR ("Error opening userdb %s+wc: %s\n", $dbfile, $tdb->errmsg($ecode));
@@ -198,16 +197,13 @@ sub del {
 sub list {
 	my ($self, $search) = @_;
 	my @results;
-	my $tdb = $self->{tdb};
 	my $value;
 	my $count = 0;
 	my $max = 25;
 
 	my $dbfile = $self->{dbfile};
-	if (!$tdb->open($dbfile, $tdb->OREADER)) {
-		print STDERR "Failed to list users in db: %s: %s\n", $dbfile, $tdb->errmsg($tdb->ecode);
-		return;
-	}
+	my $tdb = $self->opendb("r");
+	return if (!$tdb);
 	for ($tdb->iterinit(), $value = $tdb->iternext(); $value && $count < $max; $value = $tdb->iternext()) {
 		if (!$search || $value =~ /\Q$search\E/) {
 			push(@results, $value);
