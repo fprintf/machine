@@ -250,6 +250,7 @@ sub run
         my ($title, $err) = get_title($uri);
         if ($err) {
             print STDERR "Failed to retrieve $uri: $err\n";
+			$links->insert(title => "Failed to retrieve $err", tinyurl => "", link => $uri);
             next;
         }
         my $threat = $threat_check->($uri);

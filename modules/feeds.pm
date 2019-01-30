@@ -61,12 +61,13 @@ sub feeds_search {
 	my @results;
 	foreach my $feed ($Feeds->entries) {
 		# We're only looking for feeds matching pattern '$limit' (or all feeds if no pattern given)
-		next if ($limit && $feed->name =~ $limit);
+		next if ($limit && $feed->name !~ $limit);
 
-		my $max = 25;
+		# Limit search to 100 for a single feed or latest 10 for an "all feed" search
+		my $max = $limit ? 100 : 10;
 		foreach my $entry ($feed->update()->entries()) {
 			if ($entry->title =~ $query) {
-				push(@results, sprintf("[%s] %s :: %s", $feed->title(), $entry->title, mod_perl::modules::utils::tinyurl($entry->link)));
+				push(@results, sprintf("\00303,01[%s]\003 \00310,01%s\003 :: %s", $feed->title(), $entry->title, mod_perl::modules::utils::tinyurl($entry->link)));
 			}
 			last if --$max <= 0;
 		}
@@ -99,7 +100,7 @@ sub feeds_lookup {
 	my $prefix = sprintf("[%s]", $feed->title);
 	my @entries = $feed->entries();
 
-	my $format = sub { return sprintf("%s %s :: %s", @_); };
+	my $format = sub { return sprintf("\00303,01%s\003 \00310,01%s\003 :: %s", @_); };
 	foreach my $entry (@entries) {
 		# Print feed title on first iteration (only if printing more than 1 item)
 		if (!$count && $limit > 1) { 
@@ -132,9 +133,6 @@ sub feeds_lookup {
 			$content .= $format->($prefix, $entry->title, $entry->link) . "\n";
 			$content .= $entry->content()->body() . "\n";
 		}
-
-		my $url = mod_perl::modules::utils::upload_content($content);
-		$irc->say($url);
 	}
 }
 
